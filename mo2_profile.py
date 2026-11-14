@@ -61,6 +61,11 @@ def reconcile_mods(report, mods_directory):
     result = {'scope': 'export-vs-direct-mod-directories', 'complete': True,
               'findings': [], 'directory_count': 0, 'ignored_non_directory_count': 0}
     report['reconciliation'] = result
+    # A new inventory invalidates all evidence derived from the previous one.
+    # Callers may explicitly audit assets again after this reconciliation.
+    report.pop('profile_assets', None)
+    for mod in report['mods']:
+        mod.pop('directory_name', None)
     directories = {}
     blocked = set()
     def finding(code, name=''):
