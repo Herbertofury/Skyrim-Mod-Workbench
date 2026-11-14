@@ -4,9 +4,10 @@ from pathlib import Path
 import subprocess
 import sys
 import tempfile
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
-from asset_audit import audit, compare_contents
+from asset_audit import audit, compare_contents, _identity, _version
 
 
 class ContentTests(unittest.TestCase):
@@ -79,3 +80,27 @@ class ContentTests(unittest.TestCase):
         self.assertEqual(1, result.returncode)
         self.assertEqual('different', json.loads(result.stdout)['overlaps'][0]['content_equivalence'])
         self.assertEqual([b'one', b'two'], [(r / 'asset.dds').read_bytes() for r in self.roots])
+
+    def test_cross_api_ctime_but_same_api_change_detection(self):
+        path = SimpleNamespace(st_dev=1, st_ino=2, st_size=3, st_mtime_ns=4, st_ctime_ns=5)
+        fd = SimpleNamespace(st_dev=1, st_ino=2, st_size=3, st_mtime_ns=4, st_ctime_ns=9)
+        self.assertEqual(_identity(path), _identity(fd))
+        self.assertNotEqual(_version(path), _version(fd))
+
+    def test_changed_fd_metadata_during_read_stays_unknown(self):
+        self.files()
+        import os
+        real = os.fstat
+        calls = 0
+        def changing(fd):
+            nonlocal calls
+            calls += 1
+            original = real(fd)
+            return SimpleNamespace(st_dev=original.st_dev, st_ino=original.st_ino,
+                st_size=original.st_size, st_mtime_ns=original.st_mtime_ns,
+                st_ctime_ns=original.st_ctime_ns + (1 if calls % 2 == 0 else 0))
+        with patch('asset_audit.os.fstat', side_effect=changing):
+            result = compare_contents(audit(self.roots), self.roots)
+        self.assertFalse(result['complete'])
+        self.assertEqual('unknown', result['overlaps'][0]['content_equivalence'])
+        self.assertEqual('file-changed-during-read', result['errors'][0]['reason'])

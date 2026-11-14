@@ -101,7 +101,13 @@ def audit(roots, *, max_entries=20000, max_directories=5000):
 
 
 def _identity(info):
-    return (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns)
+    return (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns)
+
+
+def _version(info):
+    # ctime semantics differ between stat/fstat on Windows (CPython #157671).
+    # Compare it only between successive observations through the same API.
+    return (*_identity(info), info.st_ctime_ns)
 
 
 def _digest(path, root, expected_size, budget):
@@ -124,7 +130,8 @@ def _digest(path, root, expected_size, budget):
     flags = os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0)
     fd = os.open(path, flags)
     with os.fdopen(fd, "rb") as stream:
-        if _identity(os.fstat(stream.fileno())) != _identity(before):
+        opened = os.fstat(stream.fileno())
+        if _identity(opened) != _identity(before):
             raise ValueError("file-changed-before-read")
         digest = hashlib.sha256()
         remaining = before.st_size
@@ -135,9 +142,9 @@ def _digest(path, root, expected_size, budget):
             budget["remaining"] -= len(chunk)
             remaining -= len(chunk)
             digest.update(chunk)
-        if _identity(os.fstat(stream.fileno())) != _identity(before):
+        if _version(os.fstat(stream.fileno())) != _version(opened):
             raise ValueError("file-changed-during-read")
-    if _identity(path.lstat()) != _identity(before):
+    if _version(path.lstat()) != _version(before):
         raise ValueError("file-changed-after-read")
     return digest.hexdigest()
 
