@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 import tempfile
 import sys
-import stat
+from input_files import read_bounded
 
 MAX_BYTES = 32 * 1024 * 1024
 
@@ -97,19 +97,7 @@ def unique_object(pairs):
 
 
 def load_report(source):
-    # A byte cap cannot bound waiting for a FIFO writer or an infinite device.
-    # Preserve ordinary file/symlink-to-file inputs, but reject special objects.
-    if not stat.S_ISREG(Path(source).stat().st_mode):
-        raise ValueError('evidence source must be a regular file')
-    def bounded_open(path, flags):
-        # Also avoid blocking if a POSIX path is swapped to a FIFO after stat.
-        return os.open(path, flags | getattr(os, 'O_NONBLOCK', 0))
-    with open(source, 'rb', opener=bounded_open) as stream:
-        if not stat.S_ISREG(os.fstat(stream.fileno()).st_mode):
-            raise ValueError('evidence source must be a regular file')
-        raw = stream.read(MAX_BYTES + 1)
-    if len(raw) > MAX_BYTES:
-        raise ValueError('evidence exceeds byte limit')
+    raw = read_bounded(source, MAX_BYTES)
     value = json.loads(raw.decode('utf-8'), object_pairs_hook=unique_object)
     if not isinstance(value, dict) or set(value) != {'evidence_version', 'algorithm', 'report_sha256', 'report'}:
         raise ValueError('invalid evidence envelope')
