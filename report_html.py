@@ -19,6 +19,21 @@ def table(headers, rows):
 def render_report(report):
     """Render only; never load external assets, submit data or apply a plan."""
     sections = []
+    if report.get('scope') == 'explicit-plugin-headers-only':
+        sections.append('<h2>Explicit plugin headers</h2><p>Inventory complete: ' + text(report['complete']) +
+                        '. Header flags and declared counts do not establish ESL eligibility or record compatibility.</p>')
+        sections.append(table(['Plugin', 'Declared masters', 'ESM flag', 'ESL flag', 'Declared records', 'Header SHA-256'],
+            ((p['name'], ', '.join(p['masters']) or 'None declared', p['esm_flag'], p['esl_flag'],
+              p['hedr']['declared_record_count'], p['header_sha256']) for p in report['plugins'])))
+        sections.append('<h2>Unreadable or rejected inputs</h2>' + table(['Plugin', 'Error type'],
+            ((e['name'], e['error_type']) for e in report['errors'])))
+        if report.get('impact') is not None:
+            impact = report['impact']
+            sections.append('<h2>Master dependency impact</h2><p>Selected master: ' + text(impact['master']) +
+                            '. Scope complete: ' + text(impact['scope_complete']) +
+                            '. Only supplied plugins were scanned; record mapping and installed manager state are unverified.</p>')
+            sections.append(table(['Direct dependents'], ((name,) for name in impact['direct_dependents'])))
+            sections.append(table(['Transitive dependents'], ((name,) for name in impact['transitive_dependents'])))
     if 'mods' in report:
         sections.append('<h2>MO2 exported mod priority</h2><p>Low to high export order only. Active manager state is not verified.</p>' + table(
             ['Export priority', 'Name', 'Enabled marker', 'Kind', 'Original line'],

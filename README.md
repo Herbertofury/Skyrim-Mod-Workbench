@@ -185,3 +185,9 @@ to the new file. Incomplete header inventories and reconciliation findings can
 be saved without claiming success. Existing diagnostic exit codes remain; save
 failure or unconfirmed durability returns 2. Integrity verification is historical,
 not proof that current files or the native game match the saved report.
+
+### Readable plugin header evidence
+
+`python plugin_headers.py Explicit.esp Another.esp --master OldMaster.esm --html > headers.html`
+
+The optional offline, script-free HTML view presents declared masters, header flags/counts/hashes, rejected inputs and direct/transitive dependents. JSON remains the default. Add `--save-report NEW_FILE` to save the same create-only integrity envelope; its receipt stays on stderr, separate from HTML stdout. Incomplete inputs or save warnings still exit2. Header flags/counts do not establish ESL eligibility, FormID compatibility or game acceptance. This scans only explicit files, not an entire manager installation; nothing is edited or deployed.
