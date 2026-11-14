@@ -88,3 +88,19 @@ class EvidenceTests(unittest.TestCase):
         with patch('evidence.Path.unlink',fail_temp):receipt=save_report(self.report,self.target)
         self.assertTrue(receipt['published']);self.assertFalse(receipt['temporary_removed'])
         self.assertEqual(self.report,load_report(self.target))
+
+    @unittest.skipUnless(os.name == 'posix', 'directory descriptors are POSIX-only')
+    def test_directory_close_error_does_not_hide_publication(self):
+        real_close = os.close
+        def failed_close(fd):
+            # Model an error returned after closing the directory descriptor.
+            real_close(fd)
+            raise OSError('directory close error')
+        with patch('evidence.os.close', side_effect=failed_close):
+            receipt = save_report(self.report, self.target)
+        self.assertTrue(receipt['published'])
+        self.assertTrue(receipt['file_fsynced'])
+        self.assertEqual('unconfirmed', receipt['directory_fsync'])
+        self.assertEqual(self.report, load_report(self.target))
+        with self.assertRaises(FileExistsError):
+            save_report(self.report, self.target)
