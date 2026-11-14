@@ -135,7 +135,10 @@ def _digest(path, root, expected_size, budget):
         raise ValueError("file-changed-before-read")
     if before.st_size > budget["per_file"] or before.st_size > budget["remaining"]:
         raise ValueError("content-byte-limit")
-    flags = os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0)
+    # Prevent a FIFO substituted after lstat from blocking before fstat can
+    # reject its changed identity. This does not bound general filesystem I/O.
+    flags = (os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0)
+             | getattr(os, "O_NONBLOCK", 0))
     fd = os.open(path, flags)
     with os.fdopen(fd, "rb") as stream:
         opened = os.fstat(stream.fileno())
