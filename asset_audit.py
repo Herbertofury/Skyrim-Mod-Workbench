@@ -198,6 +198,7 @@ def main(argv=None):
     parser.add_argument("--compare-content", action="store_true",
                         help="opt in to bounded SHA-256 reads of overlapping files only")
     parser.add_argument("--html", action="store_true", help="emit an offline HTML report to stdout")
+    parser.add_argument("--save-report", metavar="NEW_FILE", help="explicitly save a create-only evidence snapshot")
     args = parser.parse_args(argv)
     try:
         report = audit(args.roots)
@@ -206,12 +207,22 @@ def main(argv=None):
     except (ValueError, OSError):
         print(json.dumps({"status": "invalid-input"}), file=sys.stderr)
         return 2
+    save_warning = False
+    if args.save_report:
+        from evidence import save_report
+        try:
+            receipt = save_report(report, args.save_report)
+            print(json.dumps({"evidence_save": receipt}), file=sys.stderr)
+            save_warning = receipt["directory_fsync"] == "unconfirmed" or not receipt["temporary_removed"]
+        except (OSError, ValueError, RecursionError) as exc:
+            print(json.dumps({"status": "evidence-not-saved", "error_type": type(exc).__name__}), file=sys.stderr)
+            save_warning = True
     if args.html:
         from report_html import render_report
         print(render_report(report), end="")
     else:
         print(json.dumps(report, indent=2, ensure_ascii=True))
-    return 2 if not report["complete"] else (1 if report["overlaps"] else 0)
+    return 2 if save_warning or not report["complete"] else (1 if report["overlaps"] else 0)
 
 
 if __name__ == "__main__":

@@ -11,7 +11,7 @@ python workbench.py examples/plugins.json
 python -m unittest discover -s tests -v
 ```
 
-The CLI validates a supplied JSON plugin inventory and detects missing/disabled masters, masters loaded after their dependents, and cycles. Plugin identity is case-insensitive. Disabled dependents are excluded. Duplicate keys/names, invalid types and path-shaped names fail closed. Input is bounded to 2 MB / 4096 plugins. It never writes files, launches tools, accesses the network or changes a game/profile.
+The CLI validates a supplied JSON plugin inventory and detects missing/disabled masters, masters loaded after their dependents, and cycles. Plugin identity is case-insensitive. Disabled dependents are excluded. Duplicate keys/names, invalid types and path-shaped names fail closed. Input is bounded to 2 MB / 4096 plugins. By default it never writes files, launches tools, accesses the network or changes a game/profile.
 
 Exit codes: `0` no dependency issue in the supplied manifest; `1` diagnostic findings; `2` invalid/unreadable input. Array order is the proposed load order. The example uses invented author-owned fixture names, not a real game inventory. `game_verified: false` is always explicit: this does not parse ESP/ESM binaries, discover implicit official masters, understand ESL limits, sort with LOOT or prove the game will load. JSON output includes supplied plugin names; review it before sharing.
 
@@ -69,4 +69,14 @@ python workbench.py examples/plugins.json --plan --html > report.html
 python asset_audit.py mod-a/Data mod-b/Data --compare-content --html > assets.html
 ```
 
-The shell creates the chosen report file; the application still does not modify its inputs. Exit codes are unchanged, including findings/incomplete results, so a nonzero status can still accompany a useful report. HTML output contains readable finding/provider tables, keyboard-accessible expandable evidence and the complete original JSON. Dynamic strings are escaped; a restrictive content-security policy disallows scripts/network requests. No remote fonts, telemetry, external assets or apply controls exist. Relative filenames and plugin names may be personal: keep reports local unless intentionally shared. HTML structure/escaping and CLI regression tests are automated; visual/native-game acceptance remains separate.
+The shell creates the chosen HTML report file; the application still does not modify its inputs. An explicit --save-report separately creates its requested evidence file. Exit codes are unchanged, including findings/incomplete results, so a nonzero status can still accompany a useful report. HTML output contains readable finding/provider tables, keyboard-accessible expandable evidence and the complete original JSON. Dynamic strings are escaped; a restrictive content-security policy disallows scripts/network requests. No remote fonts, telemetry, external assets or apply controls exist. Relative filenames and plugin names may be personal: keep reports local unless intentionally shared. HTML structure/escaping and CLI regression tests are automated; visual/native-game acceptance remains separate.
+
+## Explicit evidence snapshots
+
+Both analysis CLIs accept `--save-report NEW_FILE` to save the complete JSON report, including failures and incomplete evidence, in a SHA-256 envelope. Saving is opt-in, create-only and never overwrites an existing receipt or backup. The temporary file is flushed/fsynced before atomic same-directory hard-link publication; a concurrent existing destination wins safely. Filesystems without hard-link support fail without replacing anything.
+
+`python evidence.py receipt.json` verifies bounded input, strict envelope/version and checksum, then returns the saved report explicitly labeled **historical**, not current-file or authenticity verification. A checksum detects corruption, not a malicious party who can rewrite both data and digest. Reports include names/digests, so keep them private unless intentionally shared.
+
+Save receipts are emitted to stderr, leaving JSON/HTML stdout intact. Save failure makes the analysis exit `2` while preserving its useful report output. A POSIX directory-fsync failure reports `published: true` with durability **unconfirmed** and exit `2`; do not blindly retry as if no file exists. Windows reports directory fsync unsupported, while confirming the file flush. No platform-independent power-loss guarantee is claimed. No input/game files are modified; only the explicitly requested new evidence file is published.
+
+If temporary cleanup fails after publication, the receipt still reports `published: true`, includes `temporary_removed: false` and exits `2`. The saved evidence is retained; a temporary hard-link may remain for later manual cleanup.
