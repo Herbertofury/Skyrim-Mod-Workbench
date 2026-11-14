@@ -78,3 +78,17 @@ class HeaderTests(unittest.TestCase):
                 ph.read_header(path)
         with self.assertRaises(ValueError):
             ph.inventory([])
+
+    def test_failed_parse_still_consumes_global_budget(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            a, b = Path(tmp)/'A.esp', Path(tmp)/'B.esp'
+            raw = fixture()
+            # Correct framing but invalid HEDR length in payload.
+            bad = bytearray(raw)
+            bad[28:30] = struct.pack('<H', 11)
+            a.write_bytes(bad)
+            b.write_bytes(raw)
+            with patch('plugin_headers.MAX_TOTAL_HEADER_BYTES', len(raw)):
+                report = ph.inventory([a, b])
+            self.assertEqual(len(report['errors']), 2)
+            self.assertEqual(report['plugins'], [])
