@@ -57,3 +57,41 @@ class ReconcileTests(unittest.TestCase):
         self.assertIn(b'enabled-mod-directory-missing',result.stdout)
         self.assertEqual('+Enabled\n',source.read_text())
         self.assertNotIn(str(self.root),render_report(self.run_report()))
+
+    def test_reconcile_again_discards_missing_directory_name(self):
+        child = self.root / 'Enabled'
+        child.mkdir()
+        report = self.run_report(b'+Enabled\n')
+        self.assertEqual('Enabled', report['mods'][0]['directory_name'])
+        child.rmdir()
+        reconcile_mods(report, self.root)
+        self.assertEqual('missing', report['mods'][0]['directory_state'])
+        self.assertNotIn('directory_name', report['mods'][0])
+
+    def test_reconcile_again_invalidates_derived_asset_audit(self):
+        from mo2_profile import audit_profile_assets
+        child = self.root / 'Enabled'
+        child.mkdir()
+        report = self.run_report(b'+Enabled\n')
+        audit_profile_assets(report, self.root)
+        self.assertEqual('audited', report['profile_assets']['status'])
+        with patch('mo2_profile.os.scandir', side_effect=PermissionError):
+            reconcile_mods(report, self.root)
+        self.assertFalse(report['reconciliation']['complete'])
+        self.assertNotIn('directory_name', report['mods'][0])
+        self.assertNotIn('profile_assets', report)
+        audit_profile_assets(report, self.root)
+        self.assertEqual('blocked', report['profile_assets']['status'])
+        self.assertIsNone(report['profile_assets']['audit'])
+
+    def test_successful_reconciliation_requires_fresh_asset_audit(self):
+        from mo2_profile import audit_profile_assets
+        (self.root / 'Enabled').mkdir()
+        report = self.run_report(b'+Enabled\n')
+        audit_profile_assets(report, self.root)
+        reconcile_mods(report, self.root)
+        self.assertEqual('present', report['mods'][0]['directory_state'])
+        self.assertEqual('Enabled', report['mods'][0]['directory_name'])
+        self.assertNotIn('profile_assets', report)
+        audit_profile_assets(report, self.root)
+        self.assertEqual('audited', report['profile_assets']['status'])
