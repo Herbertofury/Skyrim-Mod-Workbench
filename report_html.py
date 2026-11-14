@@ -53,6 +53,13 @@ def render_report(report, *, historical=False):
                             '. Only supplied plugins were scanned; record mapping and installed manager state are unverified.</p>')
             sections.append(table(['Direct dependents'], ((name,) for name in impact['direct_dependents'])))
             sections.append(table(['Transitive dependents'], ((name,) for name in impact['transitive_dependents'])))
+    if 'dependency_diagnostics' in report:
+        diagnostic = report['dependency_diagnostics']
+        sections.append('<h2>Supplied header order diagnostics</h2><p>Status: ' + text(diagnostic['status']) +
+                        '. Argument order only; all supplied plugins assumed enabled. Not verified manager state.</p>')
+        sections.append(table(['Finding', 'Plugin', 'Master'],
+            ((f['code'], f['plugin'], f['master']) for f in diagnostic['findings'])))
+        sections.append('<ul>' + ''.join('<li>' + text(item) + '</li>' for item in diagnostic['limits']) + '</ul>')
     if 'mods' in report:
         sections.append('<h2>MO2 exported mod priority</h2><p>Low to high export order only. Active manager state is not verified.</p>' + table(
             ['Export priority', 'Name', 'Enabled marker', 'Kind', 'Original line'],
