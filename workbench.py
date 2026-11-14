@@ -151,6 +151,7 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("manifest", help="UTF-8 JSON inventory; read only, never a game directory")
     parser.add_argument("--plan", action="store_true", help="preview a dependency-only reorder; never apply")
+    parser.add_argument("--html", action="store_true", help="emit an offline HTML report to stdout")
     args = parser.parse_args(argv)
     try:
         with open(args.manifest, "rb") as stream:
@@ -165,7 +166,11 @@ def main(argv=None):
         # No raw input or filesystem path in default diagnostic output.
         print(json.dumps({"status": "invalid-input", "error_type": type(error).__name__}), file=sys.stderr)
         return 2
-    print(json.dumps(result, indent=2, ensure_ascii=True))
+    if args.html:
+        from report_html import render_report
+        print(render_report(result), end="")
+    else:
+        print(json.dumps(result, indent=2, ensure_ascii=True))
     return 1 if result["findings"] else 0
 
 

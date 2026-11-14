@@ -197,6 +197,7 @@ def main(argv=None):
     parser.add_argument("roots", nargs="+", help="loose Data trees in hypothetical low-to-high priority")
     parser.add_argument("--compare-content", action="store_true",
                         help="opt in to bounded SHA-256 reads of overlapping files only")
+    parser.add_argument("--html", action="store_true", help="emit an offline HTML report to stdout")
     args = parser.parse_args(argv)
     try:
         report = audit(args.roots)
@@ -205,7 +206,11 @@ def main(argv=None):
     except (ValueError, OSError):
         print(json.dumps({"status": "invalid-input"}), file=sys.stderr)
         return 2
-    print(json.dumps(report, indent=2, ensure_ascii=True))
+    if args.html:
+        from report_html import render_report
+        print(render_report(report), end="")
+    else:
+        print(json.dumps(report, indent=2, ensure_ascii=True))
     return 2 if not report["complete"] else (1 if report["overlaps"] else 0)
 
 
