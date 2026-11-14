@@ -16,9 +16,13 @@ def table(headers, rows):
     return f'<div class="table-scroll" tabindex="0" role="region" aria-label="Scrollable report table"><table><thead><tr>{head}</tr></thead><tbody>{body}</tbody></table></div>'
 
 
-def render_report(report):
+def render_report(report, *, historical=False):
     """Render only; never load external assets, submit data or apply a plan."""
     sections = []
+    if historical:
+        sections.append('<div class="notice"><strong>Historical snapshot: integrity verified only.</strong> '
+                        'The checksum matches the saved report. Publisher authenticity, current files and current game state '
+                        'have not been verified. No files were rescanned.</div>')
     if report.get('scope') == 'explicit-plugin-headers-only':
         sections.append('<h2>Explicit plugin headers</h2><p>Inventory complete: ' + text(report['complete']) +
                         '. Header flags and declared counts do not establish ESL eligibility or record compatibility.</p>')

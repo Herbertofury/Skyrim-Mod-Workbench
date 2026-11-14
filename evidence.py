@@ -115,6 +115,7 @@ def load_report(source):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--html', action='store_true', help='view verified historical evidence as offline HTML; no rescan')
     parser.add_argument('snapshot', help='existing evidence snapshot to verify; no writes')
     args = parser.parse_args(argv)
     try:
@@ -122,6 +123,16 @@ def main(argv=None):
     except (OSError, ValueError, RecursionError) as exc:
         print(json.dumps({'status': 'invalid-evidence', 'error_type': type(exc).__name__}), file=sys.stderr)
         return 2
+    if args.html:
+        from report_html import render_report
+        try:
+            html = render_report(report, historical=True)
+        except (KeyError, TypeError, ValueError) as exc:
+            print(json.dumps({'status': 'unsupported-report-view', 'integrity_verified': True,
+                              'error_type': type(exc).__name__}), file=sys.stderr)
+            return 2
+        print(html, end='')
+        return 0
     print(json.dumps({'status': 'integrity-verified', 'historical': True,
                       'authenticity_verified': False, 'current_files_verified': False,
                       'report': report}, indent=2, ensure_ascii=True))
