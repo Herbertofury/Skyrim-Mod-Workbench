@@ -19,8 +19,8 @@
     ".agents/foundry/THIRD_PARTY_SKILL_SECURITY.md": "0d640f0cfa8da1a3a51199e32a1618d38e6934cca6060c2fd38096cabcd10665"
   },
   "schemaVersion": 1,
-  "sourceCommit": "230cbeec2df2bbe14a447debd7a75cfc3986c114",
+  "sourceCommit": "87166b5f6a621c61b90bbbfe90835a3752c1c51b",
   "sourceRepository": "https://github.com/Herbertofury/Agent-Foundry",
-  "sourceWorkingTreeDirty": true,
+  "sourceWorkingTreeDirty": false,
   "version": "1.1.2"
 }
