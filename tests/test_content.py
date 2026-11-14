@@ -23,7 +23,7 @@ class ContentTests(unittest.TestCase):
         for a, b, expected in [(b'one', b'one', 'sha256-equal'), (b'one', b'two', 'different'), (b'', b'', 'sha256-equal')]:
             self.files(a, b)
             report = compare_contents(audit(self.roots), self.roots)
-            self.assertEqual(expected, report['overlaps'][0]['content_equivalence'])
+            self.assertEqual(expected, report['overlaps'][0]['content_equivalence'], report)
             self.assertEqual(len(a)+len(b), report['content_comparison']['bytes_read'])
             self.assertEqual(hashlib.sha256(a).hexdigest(), report['overlaps'][0]['providers'][0]['sha256'])
 

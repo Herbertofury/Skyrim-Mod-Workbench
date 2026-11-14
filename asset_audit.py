@@ -165,8 +165,12 @@ def compare_contents(report, roots, *, per_file_limit=16 * 1024 * 1024,
                 digest = _digest(root / provider["path"], root, provider["size_bytes"], budget)
                 provider["sha256"] = digest
                 digests.append(digest)
-            except (OSError, RuntimeError, ValueError):
-                report["errors"].append({"code": "content-unavailable-changed-or-limited",
+            except (OSError, RuntimeError, ValueError) as exc:
+                reason = str(exc) if type(exc) is ValueError and str(exc) in {
+                    "link-or-reparse-point", "path-escape", "file-changed-before-read",
+                    "content-byte-limit", "file-changed-during-read", "file-changed-after-read",
+                    "root-changed-to-link"} else type(exc).__name__
+                report["errors"].append({"code": "content-unavailable-changed-or-limited", "reason": reason,
                                          "root_index": provider["root_index"], "path": provider["path"]})
         overlap["content_equivalence"] = ("unknown" if len(digests) != len(overlap["providers"])
                                            else "sha256-equal" if len(set(digests)) == 1 else "different")
