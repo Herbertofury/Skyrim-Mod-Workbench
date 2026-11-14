@@ -23,6 +23,21 @@ def render_report(report, *, historical=False):
         sections.append('<div class="notice"><strong>Historical snapshot: integrity verified only.</strong> '
                         'The checksum matches the saved report. Publisher authenticity, current files and current game state '
                         'have not been verified. No files were rescanned.</div>')
+    if report.get('scope') == 'saved-plugin-header-comparison-only':
+        sections.append('<h2>Saved header comparison</h2><p>Complete within supplied evidence: ' + text(report['complete']) +
+                        '. Unchanged headers: ' + text(report['unchanged_headers']) + '</p>')
+        sections.append('<ul>' + ''.join('<li>' + text(limit) + '</li>' for limit in report['limits']) + '</ul>')
+        sections.append(table(['Input snapshot', 'Report SHA-256'],
+                              [('Before', report['before_report_sha256']), ('After', report['after_report_sha256'])]))
+        sections.append('<h2>Added within supplied evidence</h2>' + table(['Plugin'],
+                              ((name,) for name in report['added_in_supplied_evidence'])))
+        sections.append('<h2>Removed from supplied evidence</h2>' + table(['Plugin'],
+                              ((name,) for name in report['removed_from_supplied_evidence'])))
+        sections.append('<h2>Changed header fields</h2>' + table(['Plugin', 'Field', 'Before', 'After'],
+            ((p['name'], field, json.dumps(values['before'], ensure_ascii=True), json.dumps(values['after'], ensure_ascii=True))
+             for p in report['changed'] for field, values in p['changes'].items())))
+        sections.append('<h2>Incomplete source evidence</h2>' + table(['Snapshot', 'Error evidence'],
+            ((side, json.dumps(error, ensure_ascii=True)) for side in ('before', 'after') for error in report['input_errors'][side])))
     if report.get('scope') == 'explicit-plugin-headers-only':
         sections.append('<h2>Explicit plugin headers</h2><p>Inventory complete: ' + text(report['complete']) +
                         '. Header flags and declared counts do not establish ESL eligibility or record compatibility.</p>')
