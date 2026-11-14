@@ -31,3 +31,11 @@ This is the dedicated application project; Skyrim-Animation-Research remains the
 - [ ] Native Windows + Skyrim acceptance on permitted fixtures; actual game load/save/reload and playback evidence where applicable.
 
 Do not interpret manifest-only success as a healthy install or automatically clean a save. Preserve originals and failures. No credentials, personal saves, private/paywalled fixtures or Bethesda assets in this public repository. New integrations require exact license/dependency review and target-project correctness/performance comparison before promotion.
+
+## Dependency repair preview
+
+`python workbench.py inventory.json --plan` adds a non-mutating candidate order and zero-based move list. It refuses to propose a partial repair if any enabled plugin has a missing/disabled master or a dependency cycle. It never enables a plugin, removes a plugin or writes a load-order file. Disabled entries retain their slots; available nodes use their original order as the deterministic tie-breaker. Already valid dependency orders are unchanged.
+
+The plan includes a SHA-256 of the canonical validated manifest as its basis identity, not an authorization token or proof of actual file contents. Input changes invalidate that identity. CLI exit status still describes the original input: a preview does not turn unresolved findings into success.
+
+**This is not LOOT sorting or an executable repair plan.** Plugin type ordering, implicit official plugins, load limits, user rules, masterlist constraints, record conflicts and real manager state are outside this manifest-only preview. A future supported adapter must revalidate all these before any apply capability. No apply capability exists. Regression tests cover all 120 permutations of a five-node dependency graph, cycles, missing/disabled masters, stable order, disabled slots, basis identity and a 2,000-node reverse chain.
