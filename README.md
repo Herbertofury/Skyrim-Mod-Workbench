@@ -59,3 +59,14 @@ No deployment, deletion, copying, archive inspection, content-equivalence check 
 Comparison reads at most 16 MiB per provider and 128 MiB total, in 64 KiB chunks. Larger/unreadable/changed files leave an incomplete report with unknown equivalence and no proposed winners. Incomplete inventories skip comparison entirely. Symlinks/reparse points are refused and before/after file identity checks detect ordinary concurrent modifications. This remains a best-effort snapshot, not protection against hostile concurrent filesystem manipulation; stop external edits first. Digests do not imply mod compatibility or permission to redistribute. No data is uploaded, deleted or changed, and there is no deduplication/apply action.
 
 Platform note: [CPython #157671](https://github.com/python/cpython/issues/157671) documents Windows stat/fstat ctime differences. The comparator matches common identity fields across APIs and checks ctime changes within each API separately; it does not remove the during-read change check. Initial Windows 3.13 CI exposed this issue before merge.
+
+## Offline readable reports
+
+Add `--html` to either CLI to emit a standalone, script-free HTML report to standard output. For example:
+
+```sh
+python workbench.py examples/plugins.json --plan --html > report.html
+python asset_audit.py mod-a/Data mod-b/Data --compare-content --html > assets.html
+```
+
+The shell creates the chosen report file; the application still does not modify its inputs. Exit codes are unchanged, including findings/incomplete results, so a nonzero status can still accompany a useful report. HTML output contains readable finding/provider tables, keyboard-accessible expandable evidence and the complete original JSON. Dynamic strings are escaped; a restrictive content-security policy disallows scripts/network requests. No remote fonts, telemetry, external assets or apply controls exist. Relative filenames and plugin names may be personal: keep reports local unless intentionally shared. HTML structure/escaping and CLI regression tests are automated; visual/native-game acceptance remains separate.
