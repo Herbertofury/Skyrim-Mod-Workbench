@@ -1,5 +1,6 @@
 """Bounded, read-only TES4 header inventory and master-impact discovery (not repair)."""
 import argparse
+from collections import deque
 import hashlib
 import json
 import math
@@ -114,15 +115,21 @@ def inventory(paths, master=None):
             report['errors'].append({'name': name, 'error_type': type(exc).__name__})
             report['complete'] = False
     if target:
+        # Build reverse edges once. Repeated rescans are quadratic when the
+        # input order is opposite to the dependency chain (up to 4096 files).
+        dependents = {}
+        for plugin in report['plugins']:
+            for dependency in plugin['masters']:
+                dependents.setdefault(dependency.casefold(), []).append(plugin['name'])
+        direct = list(dependents.get(target, ()))
         affected = {target}
-        direct = [p['name'] for p in report['plugins'] if target in {m.casefold() for m in p['masters']}]
-        changed = True
-        while changed:
-            changed = False
-            for p in report['plugins']:
-                if p['name'].casefold() not in affected and any(m.casefold() in affected for m in p['masters']):
-                    affected.add(p['name'].casefold())
-                    changed = True
+        pending = deque([target])
+        while pending:
+            for name in dependents.get(pending.popleft(), ()):
+                key = name.casefold()
+                if key not in affected:
+                    affected.add(key)
+                    pending.append(key)
         report['impact'] = {'master': master, 'direct_dependents': direct,
                             'transitive_dependents': [p['name'] for p in report['plugins']
                                                      if p['name'].casefold() in affected and p['name'].casefold() != target],
