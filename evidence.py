@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import tempfile
 import sys
+from input_files import read_bounded
 
 MAX_BYTES = 32 * 1024 * 1024
 
@@ -65,8 +66,25 @@ def save_report(report, destination):
             receipt['directory_fsync'] = 'unconfirmed'
         finally:
             if directory_fd is not None:
-                os.close(directory_fd)
+                try:
+                    os.close(directory_fd)
+                except OSError:
+                    # Publication already happened; never report this as unsaved.
+                    # Do not retry close: the descriptor may already be released.
+                    receipt['directory_fsync'] = 'unconfirmed'
     return receipt
+
+
+
+def save_cli_report(report, destination):
+    """Emit a save receipt on stderr; return whether CLI should warn with exit 2."""
+    try:
+        receipt = save_report(report, destination)
+        print(json.dumps({'evidence_save': receipt}), file=sys.stderr)
+        return receipt['directory_fsync'] == 'unconfirmed' or not receipt['temporary_removed']
+    except (OSError, ValueError, RecursionError) as exc:
+        print(json.dumps({'status': 'evidence-not-saved', 'error_type': type(exc).__name__}), file=sys.stderr)
+        return True
 
 
 def unique_object(pairs):
@@ -79,10 +97,7 @@ def unique_object(pairs):
 
 
 def load_report(source):
-    with open(source, 'rb') as stream:
-        raw = stream.read(MAX_BYTES + 1)
-    if len(raw) > MAX_BYTES:
-        raise ValueError('evidence exceeds byte limit')
+    raw = read_bounded(source, MAX_BYTES)
     value = json.loads(raw.decode('utf-8'), object_pairs_hook=unique_object)
     if not isinstance(value, dict) or set(value) != {'evidence_version', 'algorithm', 'report_sha256', 'report'}:
         raise ValueError('invalid evidence envelope')
@@ -98,6 +113,7 @@ def load_report(source):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--html', action='store_true', help='view verified historical evidence as offline HTML; no rescan')
     parser.add_argument('snapshot', help='existing evidence snapshot to verify; no writes')
     args = parser.parse_args(argv)
     try:
@@ -105,6 +121,16 @@ def main(argv=None):
     except (OSError, ValueError, RecursionError) as exc:
         print(json.dumps({'status': 'invalid-evidence', 'error_type': type(exc).__name__}), file=sys.stderr)
         return 2
+    if args.html:
+        from report_html import render_report
+        try:
+            html = render_report(report, historical=True)
+        except (KeyError, TypeError, ValueError) as exc:
+            print(json.dumps({'status': 'unsupported-report-view', 'integrity_verified': True,
+                              'error_type': type(exc).__name__}), file=sys.stderr)
+            return 2
+        print(html, end='')
+        return 0
     print(json.dumps({'status': 'integrity-verified', 'historical': True,
                       'authenticity_verified': False, 'current_files_verified': False,
                       'report': report}, indent=2, ensure_ascii=True))

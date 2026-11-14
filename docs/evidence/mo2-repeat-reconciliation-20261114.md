@@ -22,3 +22,11 @@ exits 0, and `git diff --check` passes. Only authored temporary directories were
 used. No MO2 profile, user mod, plugin, or save was edited. This is not native
 Windows, deployed manager, or Skyrim game acceptance. Pending traversal PR #15
 is separate and was not included or changed.
+
+## Resumed current-main verification
+
+Reconciled this existing pass with main `2a4717dd503567801be2245942e3dde91a4f7fe1`
+without duplicating its header-diagnostics, evidence, or input-reading changes.
+The final combined suite runs 134 tests: 133 pass and one Windows-only test is
+skipped on Linux. The example CLI exits 0 and the original three repeated-scan
+regressions pass. Native MO2 and Skyrim acceptance remains unclaimed.

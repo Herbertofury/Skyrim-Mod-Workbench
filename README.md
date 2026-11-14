@@ -166,3 +166,61 @@ Preview accepts an explicitly selected Windows EXE on either host; actual execut
 Compatibility research is advisory evidence, not an automatic veto based on speculation. Future Bruma/ESL workflows should retain source, version, confidence, observed failures and the user's override decision without silently disabling authorized updates. Explicit input-integrity checks and destructive-operation safeguards remain separate: an unreadable file or unknown FormID mapping cannot truthfully be reported as a successful repair.
 
 The planned Bethesda knowledge store should preserve compact searchable tool/version/license/format/operation evidence and refresh provenance. SQLite and Rust/rusqlite are candidates to benchmark against representative ingestion, search, durable-write/recovery and application workloads; neither is declared fastest or selected without measurement. CKPE integration must match the exact Creation Kit build and native CPU/runtime constraints. These database and CKPE items are roadmap work, not implemented capabilities in this adapter.
+
+### Save plugin-header and MO2 evidence
+
+Both commands can now persist the same create-only, checksummed report envelope
+as manifest and loose-asset diagnostics:
+
+```console
+python plugin_headers.py Patch.esp --master Old.esm --save-report headers.json
+python mo2_profile.py modlist.txt --mods-directory mods --save-report profile.json
+python evidence.py profile.json
+```
+
+`--save-report` is opt-in and writes only the named new report, never a plugin,
+modlist, existing report, or backup. It also works with MO2 `--html`: HTML goes to
+stdout, the save receipt to stderr, and the complete machine-readable evidence
+to the new file. Incomplete header inventories and reconciliation findings can
+be saved without claiming success. Existing diagnostic exit codes remain; save
+failure or unconfirmed durability returns 2. Integrity verification is historical,
+not proof that current files or the native game match the saved report.
+
+### Readable plugin header evidence
+
+`python plugin_headers.py Explicit.esp Another.esp --master OldMaster.esm --html > headers.html`
+
+The optional offline, script-free HTML view presents declared masters, header flags/counts/hashes, rejected inputs and direct/transitive dependents. JSON remains the default. Add `--save-report NEW_FILE` to save the same create-only integrity envelope; its receipt stays on stderr, separate from HTML stdout. Incomplete inputs or save warnings still exit2. Header flags/counts do not establish ESL eligibility, FormID compatibility or game acceptance. This scans only explicit files, not an entire manager installation; nothing is edited or deployed.
+
+### Review saved evidence without rescanning
+
+`python evidence.py saved-report.json --html > saved-report.html`
+
+Verifies the existing snapshot checksum before generating an offline, script-free view with an explicit **historical snapshot** notice. It does not rescan files, establish authenticity, or confirm current manager/game state. JSON verification remains the default. Invalid evidence produces no HTML and exits2; an integrity-valid report with an unsupported presentation shape produces a separate `unsupported-report-view` diagnostic rather than a traceback or misleading current-status claim. The saved evidence is never modified.
+
+### Compare before/after header evidence
+
+```sh
+python plugin_headers.py OldCopy/Example.esp --save-report before.json
+python plugin_headers.py NewCopy/Example.esp --save-report after.json
+python header_compare.py before.json after.json --save-report comparison.json
+python evidence.py comparison.json --html > comparison.html
+```
+
+Comparison verifies both saved envelopes before reporting plugins added/removed **within supplied evidence**, changed master lists (including order), flags, declared counts, names and header hashes. Case-insensitive plugin identity is preserved; differently named plugins are not guessed to be renames. Input report hashes make the comparison traceable. Files are never rescanned or edited.
+
+Exit0 means equal supplied headers, exit1 means header differences, and exit2 means invalid/incomplete evidence or a save warning. Incomplete inputs retain their errors and cannot produce a clean comparison. Equal headers do not establish equal records/assets; a renamed master is not a FormID mapping; ESL flags/counts do not prove eligibility. This supports update investigation, **not automatic Bruma migration or game compatibility certification**.
+
+Saved-header comparison validates schema 1, HEDR numeric fields and binary-format ranges, header length bounds, and agreement between the raw flags and derived ESM/ESL flags before comparing. An integrity checksum alone is not enough to establish structurally valid evidence. These checks still do not authenticate the producer, recompute header hashes from absent plugin bytes, or validate records/game compatibility.
+
+Manifest, MO2 modlist and saved-evidence CLI inputs must be regular files (ordinary file symlinks remain supported). Shared intake rejects pipes, devices and directories before reading, rechecks the opened descriptor and bounds bytes read. POSIX nonblocking open also handles a path swapped to a FIFO after preflight. This is not a general filesystem-latency timeout or guarantee against concurrent file mutation; no input files are modified.
+
+### Diagnose dependencies directly from explicit plugin headers
+
+```sh
+python plugin_headers.py Base.esm Patch.esp --diagnose-order --html > dependencies.html
+```
+
+Opt-in `--diagnose-order` reuses the existing dependency engine with masters read from actual TES4 headers instead of requiring a hand-authored manifest. It checks missing supplied masters, masters appearing after dependents and cycles. Explicit argument order is hypothetical load order; every supplied plugin is assumed enabled. This does not discover the active profile, implicit official masters, plugin-type ordering, LOOT rules, records or game compatibility. A missing master means absent from the supplied set, not proven absent from the installation.
+
+Incomplete header inventories block diagnosis rather than misclassify failed inputs as missing masters. JSON and offline HTML include scope/assumptions; `--save-report NEW_FILE` retains the same create-only historical evidence. With diagnosis requested, exit1 means dependency findings, exit0 no findings within the stated scope, and exit2 incomplete inputs or save warnings. Without the flag, existing header-inventory behavior is unchanged. No sorting, deployment or plugin writes occur.

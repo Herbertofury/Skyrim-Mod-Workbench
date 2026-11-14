@@ -5,6 +5,7 @@ import heapq
 import json
 import re
 import sys
+from input_files import read_bounded
 
 MAX_BYTES = 2_000_000
 MAX_PLUGINS = 4096
@@ -155,10 +156,7 @@ def main(argv=None):
     parser.add_argument("--save-report", metavar="NEW_FILE", help="explicitly save a create-only evidence snapshot")
     args = parser.parse_args(argv)
     try:
-        with open(args.manifest, "rb") as stream:
-            raw = stream.read(MAX_BYTES + 1)
-        if len(raw) > MAX_BYTES:
-            raise ValueError("manifest exceeds byte limit")
+        raw = read_bounded(args.manifest, MAX_BYTES)
         data = json.loads(raw.decode("utf-8-sig"), object_pairs_hook=unique_object)
         result = diagnose(data)
         if args.plan:
@@ -169,14 +167,8 @@ def main(argv=None):
         return 2
     save_warning = False
     if args.save_report:
-        from evidence import save_report
-        try:
-            receipt = save_report(result, args.save_report)
-            print(json.dumps({"evidence_save": receipt}), file=sys.stderr)
-            save_warning = receipt["directory_fsync"] == "unconfirmed" or not receipt["temporary_removed"]
-        except (OSError, ValueError, RecursionError) as exc:
-            print(json.dumps({"status": "evidence-not-saved", "error_type": type(exc).__name__}), file=sys.stderr)
-            save_warning = True
+        from evidence import save_cli_report
+        save_warning = save_cli_report(result, args.save_report)
     if args.html:
         from report_html import render_report
         print(render_report(result), end="")

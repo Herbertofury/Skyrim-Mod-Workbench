@@ -16,9 +16,50 @@ def table(headers, rows):
     return f'<div class="table-scroll" tabindex="0" role="region" aria-label="Scrollable report table"><table><thead><tr>{head}</tr></thead><tbody>{body}</tbody></table></div>'
 
 
-def render_report(report):
+def render_report(report, *, historical=False):
     """Render only; never load external assets, submit data or apply a plan."""
     sections = []
+    if historical:
+        sections.append('<div class="notice"><strong>Historical snapshot: integrity verified only.</strong> '
+                        'The checksum matches the saved report. Publisher authenticity, current files and current game state '
+                        'have not been verified. No files were rescanned.</div>')
+    if report.get('scope') == 'saved-plugin-header-comparison-only':
+        sections.append('<h2>Saved header comparison</h2><p>Complete within supplied evidence: ' + text(report['complete']) +
+                        '. Unchanged headers: ' + text(report['unchanged_headers']) + '</p>')
+        sections.append('<ul>' + ''.join('<li>' + text(limit) + '</li>' for limit in report['limits']) + '</ul>')
+        sections.append(table(['Input snapshot', 'Report SHA-256'],
+                              [('Before', report['before_report_sha256']), ('After', report['after_report_sha256'])]))
+        sections.append('<h2>Added within supplied evidence</h2>' + table(['Plugin'],
+                              ((name,) for name in report['added_in_supplied_evidence'])))
+        sections.append('<h2>Removed from supplied evidence</h2>' + table(['Plugin'],
+                              ((name,) for name in report['removed_from_supplied_evidence'])))
+        sections.append('<h2>Changed header fields</h2>' + table(['Plugin', 'Field', 'Before', 'After'],
+            ((p['name'], field, json.dumps(values['before'], ensure_ascii=True), json.dumps(values['after'], ensure_ascii=True))
+             for p in report['changed'] for field, values in p['changes'].items())))
+        sections.append('<h2>Incomplete source evidence</h2>' + table(['Snapshot', 'Error evidence'],
+            ((side, json.dumps(error, ensure_ascii=True)) for side in ('before', 'after') for error in report['input_errors'][side])))
+    if report.get('scope') == 'explicit-plugin-headers-only':
+        sections.append('<h2>Explicit plugin headers</h2><p>Inventory complete: ' + text(report['complete']) +
+                        '. Header flags and declared counts do not establish ESL eligibility or record compatibility.</p>')
+        sections.append(table(['Plugin', 'Declared masters', 'ESM flag', 'ESL flag', 'Declared records', 'Header SHA-256'],
+            ((p['name'], ', '.join(p['masters']) or 'None declared', p['esm_flag'], p['esl_flag'],
+              p['hedr']['declared_record_count'], p['header_sha256']) for p in report['plugins'])))
+        sections.append('<h2>Unreadable or rejected inputs</h2>' + table(['Plugin', 'Error type'],
+            ((e['name'], e['error_type']) for e in report['errors'])))
+        if report.get('impact') is not None:
+            impact = report['impact']
+            sections.append('<h2>Master dependency impact</h2><p>Selected master: ' + text(impact['master']) +
+                            '. Scope complete: ' + text(impact['scope_complete']) +
+                            '. Only supplied plugins were scanned; record mapping and installed manager state are unverified.</p>')
+            sections.append(table(['Direct dependents'], ((name,) for name in impact['direct_dependents'])))
+            sections.append(table(['Transitive dependents'], ((name,) for name in impact['transitive_dependents'])))
+    if 'dependency_diagnostics' in report:
+        diagnostic = report['dependency_diagnostics']
+        sections.append('<h2>Supplied header order diagnostics</h2><p>Status: ' + text(diagnostic['status']) +
+                        '. Argument order only; all supplied plugins assumed enabled. Not verified manager state.</p>')
+        sections.append(table(['Finding', 'Plugin', 'Master'],
+            ((f['code'], f['plugin'], f['master']) for f in diagnostic['findings'])))
+        sections.append('<ul>' + ''.join('<li>' + text(item) + '</li>' for item in diagnostic['limits']) + '</ul>')
     if 'mods' in report:
         sections.append('<h2>MO2 exported mod priority</h2><p>Low to high export order only. Active manager state is not verified.</p>' + table(
             ['Export priority', 'Name', 'Enabled marker', 'Kind', 'Original line'],
