@@ -1,4 +1,5 @@
 """Reparse-attribute contracts without requiring Windows junction privileges."""
+import os
 from pathlib import Path
 from types import SimpleNamespace
 import tempfile
@@ -44,3 +45,41 @@ class ReparseTests(unittest.TestCase):
         digest.assert_not_called()
         self.assertFalse(report['complete'])
         self.assertEqual('root-changed-to-link', report['errors'][0]['reason'])
+
+
+@unittest.skipUnless(os.name == 'nt', 'requires native Windows junctions')
+class NativeJunctionTests(unittest.TestCase):
+    def test_real_junction_roots_children_and_replaced_content_root(self):
+        import subprocess
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            target = base / 'target'; target.mkdir()
+            secret = target / 'asset.txt'; secret.write_bytes(b'unchanged fixture')
+            root = base / 'root'; root.mkdir()
+            junction = root / 'junction'
+            completed = subprocess.run(
+                ['cmd.exe', '/d', '/c', 'mklink', '/J', str(junction), str(target)],
+                capture_output=True, text=True, timeout=10)
+            self.assertEqual(0, completed.returncode, completed.stdout + completed.stderr)
+            try:
+                self.assertTrue(junction.lstat().st_file_attributes & 0x400)
+                root_report = audit([junction])
+                self.assertFalse(root_report['complete'])
+                self.assertEqual(0, root_report['file_count'])
+                self.assertEqual('root-reparse-point', root_report['errors'][0]['code'])
+                child_report = audit([root])
+                self.assertFalse(child_report['complete'])
+                self.assertEqual(0, child_report['file_count'])
+                self.assertEqual('reparse-point-skipped', child_report['errors'][0]['code'])
+                report = {'complete': True, 'errors': [], 'overlaps': [
+                    {'providers': [{'root_index': 0, 'path': 'asset.txt', 'size_bytes': 17}],
+                     'proposed_winner_root': 0}]}
+                compare_contents(report, [junction])
+                self.assertEqual(0, report['content_comparison']['bytes_read'])
+                self.assertFalse(report['complete'])
+                self.assertIsNone(report['overlaps'][0]['proposed_winner_root'])
+                self.assertEqual('root-changed-to-link', report['errors'][0]['reason'])
+                self.assertEqual(b'unchanged fixture', secret.read_bytes())
+            finally:
+                # Remove only the fixture junction, never the target's contents.
+                junction.rmdir()
