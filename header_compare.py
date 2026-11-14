@@ -6,12 +6,14 @@ import re
 import sys
 from evidence import canonical, load_report, save_cli_report
 from workbench import plugin_name
+from plugin_headers import MAX_HEADER_BYTES
 
 FIELDS = ('name', 'masters', 'flags', 'esm_flag', 'esl_flag', 'form_version', 'hedr', 'header_sha256', 'header_bytes')
 
 
 def _index(report):
-    if (not isinstance(report, dict) or report.get('scope') != 'explicit-plugin-headers-only'
+    if (not isinstance(report, dict) or type(report.get('schema_version')) is not int
+            or report['schema_version'] != 1 or report.get('scope') != 'explicit-plugin-headers-only'
             or report.get('game_verified') is not False or type(report.get('complete')) is not bool
             or not isinstance(report.get('errors'), list) or not isinstance(report.get('plugins'), list)
             or len(report['plugins']) > 4096):
@@ -35,6 +37,15 @@ def _index(report):
                 raise ValueError('invalid numeric header evidence')
         if type(p['esm_flag']) is not bool or type(p['esl_flag']) is not bool or not isinstance(p['hedr'], dict):
             raise ValueError('invalid header fields')
+        if (p['flags'] > 0xffffffff or p['flags'] & 0x40000
+                or p['form_version'] > 0xffff or not 42 <= p['header_bytes'] <= MAX_HEADER_BYTES + 24
+                or p['esm_flag'] != bool(p['flags'] & 1) or p['esl_flag'] != bool(p['flags'] & 0x200)):
+            raise ValueError('inconsistent or out-of-range header evidence')
+        hedr = p['hedr']
+        if (type(hedr.get('version')) not in (int, float) or not -3.4028234663852886e38 <= hedr['version'] <= 3.4028234663852886e38
+                or any(type(hedr.get(f)) is not int or not 0 <= hedr[f] <= 0xffffffff
+                       for f in ('declared_record_count', 'next_object_id'))):
+            raise ValueError('invalid HEDR evidence')
         result[key] = p
     return result
 

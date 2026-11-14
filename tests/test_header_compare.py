@@ -46,3 +46,35 @@ class HeaderComparisonTests(unittest.TestCase):
             b.write_text('{}')
             with contextlib.redirect_stdout(io.StringIO()) as stdout,contextlib.redirect_stderr(io.StringIO()):self.assertEqual(hc.main([str(a),str(b)]),2)
             self.assertEqual(stdout.getvalue(),'')
+
+class HeaderEvidenceValidationTests(unittest.TestCase):
+    def test_malformed_hedr_cannot_be_certified_equal(self):
+        for hedr in ({}, {'version': '1.7', 'declared_record_count': 0, 'next_object_id': 0},
+                     {'version': True, 'declared_record_count': 0, 'next_object_id': 0},
+                     {'version': 1.7, 'declared_record_count': -1, 'next_object_id': 0},
+                     {'version': 1.7, 'declared_record_count': False, 'next_object_id': 0},
+                     {'version': 1.7, 'declared_record_count': 0, 'next_object_id': 2**32}):
+            with self.subTest(hedr=hedr):
+                a=report();a['plugins'][0]['hedr']=hedr
+                with self.assertRaises(ValueError):hc.compare(a,copy.deepcopy(a))
+    def test_impossible_header_ranges_and_flag_conflicts_rejected(self):
+        for fields in ({'flags': 2**32}, {'form_version': 65536}, {'header_bytes': 0},
+                       {'header_bytes': ph.MAX_HEADER_BYTES+25}, {'esm_flag': True}, {'esl_flag': True}):
+            with self.subTest(fields=fields):
+                a=report();a['plugins'][0].update(fields)
+                with self.assertRaises(ValueError):hc.compare(a,copy.deepcopy(a))
+    def test_schema_and_nonfinite_version_rejected(self):
+        for version in (None,True,2):
+            a=report();a['schema_version']=version
+            with self.subTest(schema=version),self.assertRaises(ValueError):hc.compare(a,a)
+        for version in (float('nan'),float('inf'),-float('inf'),10**400):
+            a=report();a['plugins'][0]['hedr']['version']=version
+            with self.subTest(version=version),self.assertRaises(ValueError):hc.compare(a,a)
+    def test_valid_checksum_does_not_override_structural_failure(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            a=Path(tmp)/'bad';b=Path(tmp)/'good';bad=report();bad['plugins'][0]['hedr']={}
+            save_report(bad,a);save_report(report(),b)
+            with contextlib.redirect_stdout(io.StringIO()) as out,contextlib.redirect_stderr(io.StringIO()) as err:
+                self.assertEqual(hc.main([str(a),str(b)]),2)
+            self.assertEqual(out.getvalue(),'')
+            self.assertEqual(json.loads(err.getvalue())['status'],'invalid-comparison-input')
