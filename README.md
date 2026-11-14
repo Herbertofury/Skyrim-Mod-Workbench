@@ -197,3 +197,16 @@ The optional offline, script-free HTML view presents declared masters, header fl
 `python evidence.py saved-report.json --html > saved-report.html`
 
 Verifies the existing snapshot checksum before generating an offline, script-free view with an explicit **historical snapshot** notice. It does not rescan files, establish authenticity, or confirm current manager/game state. JSON verification remains the default. Invalid evidence produces no HTML and exits2; an integrity-valid report with an unsupported presentation shape produces a separate `unsupported-report-view` diagnostic rather than a traceback or misleading current-status claim. The saved evidence is never modified.
+
+### Compare before/after header evidence
+
+```sh
+python plugin_headers.py OldCopy/Example.esp --save-report before.json
+python plugin_headers.py NewCopy/Example.esp --save-report after.json
+python header_compare.py before.json after.json --save-report comparison.json
+python evidence.py comparison.json --html > comparison.html
+```
+
+Comparison verifies both saved envelopes before reporting plugins added/removed **within supplied evidence**, changed master lists (including order), flags, declared counts, names and header hashes. Case-insensitive plugin identity is preserved; differently named plugins are not guessed to be renames. Input report hashes make the comparison traceable. Files are never rescanned or edited.
+
+Exit0 means equal supplied headers, exit1 means header differences, and exit2 means invalid/incomplete evidence or a save warning. Incomplete inputs retain their errors and cannot produce a clean comparison. Equal headers do not establish equal records/assets; a renamed master is not a FormID mapping; ESL flags/counts do not prove eligibility. This supports update investigation, **not automatic Bruma migration or game compatibility certification**.
