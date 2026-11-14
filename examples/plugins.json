@@ -1,0 +1,1 @@
+{"schema_version":1,"plugins":[{"name":"ExampleBase.esm","enabled":true,"masters":[]},{"name":"ExamplePatch.esp","enabled":true,"masters":["ExampleBase.esm"]}]}
