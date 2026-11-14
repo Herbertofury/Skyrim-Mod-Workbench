@@ -152,6 +152,7 @@ def main(argv=None):
     parser.add_argument("manifest", help="UTF-8 JSON inventory; read only, never a game directory")
     parser.add_argument("--plan", action="store_true", help="preview a dependency-only reorder; never apply")
     parser.add_argument("--html", action="store_true", help="emit an offline HTML report to stdout")
+    parser.add_argument("--save-report", metavar="NEW_FILE", help="explicitly save a create-only evidence snapshot")
     args = parser.parse_args(argv)
     try:
         with open(args.manifest, "rb") as stream:
@@ -166,12 +167,22 @@ def main(argv=None):
         # No raw input or filesystem path in default diagnostic output.
         print(json.dumps({"status": "invalid-input", "error_type": type(error).__name__}), file=sys.stderr)
         return 2
+    save_warning = False
+    if args.save_report:
+        from evidence import save_report
+        try:
+            receipt = save_report(result, args.save_report)
+            print(json.dumps({"evidence_save": receipt}), file=sys.stderr)
+            save_warning = receipt["directory_fsync"] == "unconfirmed" or not receipt["temporary_removed"]
+        except (OSError, ValueError, RecursionError) as exc:
+            print(json.dumps({"status": "evidence-not-saved", "error_type": type(exc).__name__}), file=sys.stderr)
+            save_warning = True
     if args.html:
         from report_html import render_report
         print(render_report(result), end="")
     else:
         print(json.dumps(result, indent=2, ensure_ascii=True))
-    return 1 if result["findings"] else 0
+    return 2 if save_warning else (1 if result["findings"] else 0)
 
 
 if __name__ == "__main__":
