@@ -159,6 +159,7 @@ def main(argv=None):
     parser.add_argument("--mods-directory", help="opt in to read-only reconciliation with an explicitly selected MO2 mods directory")
     parser.add_argument('--audit-assets', action='store_true', help='audit enabled regular mod loose files in exported priority order')
     parser.add_argument('--compare-content', action='store_true', help='opt in to bounded overlapping-file reads; requires --audit-assets')
+    parser.add_argument('--save-report', metavar='NEW_FILE', help='explicitly save a create-only evidence snapshot')
     args = parser.parse_args(argv)
     if (args.audit_assets and not args.mods_directory) or (args.compare_content and not args.audit_assets):
         parser.error('--audit-assets requires --mods-directory; --compare-content requires --audit-assets')
@@ -174,11 +175,17 @@ def main(argv=None):
         # No personal path/name in the failure output.
         print(json.dumps({'status': 'invalid-mo2-export', 'error_type': type(exc).__name__}), file=sys.stderr)
         return 2
+    save_warning = False
+    if args.save_report:
+        from evidence import save_cli_report
+        save_warning = save_cli_report(result, args.save_report)
     if args.html:
         from report_html import render_report
         print(render_report(result), end='')
     else:
         print(json.dumps(result, indent=2, ensure_ascii=True))
+    if save_warning:
+        return 2
     assets = result.get('profile_assets')
     if assets:
         if assets['blockers'] or (assets['audit'] and not assets['audit']['complete']):

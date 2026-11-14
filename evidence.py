@@ -74,6 +74,18 @@ def save_report(report, destination):
     return receipt
 
 
+
+def save_cli_report(report, destination):
+    """Emit a save receipt on stderr; return whether CLI should warn with exit 2."""
+    try:
+        receipt = save_report(report, destination)
+        print(json.dumps({'evidence_save': receipt}), file=sys.stderr)
+        return receipt['directory_fsync'] == 'unconfirmed' or not receipt['temporary_removed']
+    except (OSError, ValueError, RecursionError) as exc:
+        print(json.dumps({'status': 'evidence-not-saved', 'error_type': type(exc).__name__}), file=sys.stderr)
+        return True
+
+
 def unique_object(pairs):
     result = {}
     for key, value in pairs:
