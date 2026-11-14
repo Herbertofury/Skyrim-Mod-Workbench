@@ -24,12 +24,12 @@ class EvidenceSourceTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             fifo=Path(tmp)/'receipt';os.mkfifo(fifo)
             # Simulate the preflight having seen the regular file before swap.
-            with patch.object(Path,'stat',return_value=Mock(st_mode=0o100600)):
+            with patch.object(Path,'stat',return_value=Mock(st_mode=0o100600,st_size=0)):
                 with self.assertRaisesRegex(ValueError,'regular file'):
                     evidence.load_report(fifo)
 
     def test_directory_rejected_before_open(self):
-        with tempfile.TemporaryDirectory() as tmp, patch('evidence.open',create=True) as opened:
+        with tempfile.TemporaryDirectory() as tmp, patch('input_files.open',create=True) as opened:
             with self.assertRaises(ValueError):evidence.load_report(tmp)
             opened.assert_not_called()
 

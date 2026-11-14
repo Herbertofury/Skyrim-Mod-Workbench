@@ -7,6 +7,7 @@ import stat
 from pathlib import Path
 import re
 import sys
+from input_files import read_bounded
 
 MAX_BYTES = 2_000_000
 MAX_MODS = 4096
@@ -164,8 +165,7 @@ def main(argv=None):
     if (args.audit_assets and not args.mods_directory) or (args.compare_content and not args.audit_assets):
         parser.error('--audit-assets requires --mods-directory; --compare-content requires --audit-assets')
     try:
-        with open(args.modlist, 'rb') as stream:
-            raw = stream.read(MAX_BYTES + 1)
+        raw = read_bounded(args.modlist, MAX_BYTES)
         result = parse_modlist(raw)
         if args.mods_directory:
             result = reconcile_mods(result, args.mods_directory)

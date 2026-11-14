@@ -5,6 +5,7 @@ import heapq
 import json
 import re
 import sys
+from input_files import read_bounded
 
 MAX_BYTES = 2_000_000
 MAX_PLUGINS = 4096
@@ -155,10 +156,7 @@ def main(argv=None):
     parser.add_argument("--save-report", metavar="NEW_FILE", help="explicitly save a create-only evidence snapshot")
     args = parser.parse_args(argv)
     try:
-        with open(args.manifest, "rb") as stream:
-            raw = stream.read(MAX_BYTES + 1)
-        if len(raw) > MAX_BYTES:
-            raise ValueError("manifest exceeds byte limit")
+        raw = read_bounded(args.manifest, MAX_BYTES)
         data = json.loads(raw.decode("utf-8-sig"), object_pairs_hook=unique_object)
         result = diagnose(data)
         if args.plan:
