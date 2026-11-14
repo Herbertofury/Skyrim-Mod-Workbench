@@ -27,10 +27,14 @@ def audit(roots, *, max_entries=20000, max_directories=5000):
         root = Path(raw_root)
         try:
             # Reject aliases and nesting so one mod's tree cannot count as two mods.
-            canonical = root.resolve(strict=True)
-            if root.is_symlink():
+            root_info = root.lstat()
+            if stat.S_ISLNK(root_info.st_mode):
                 error("root-symlink", root_index)
                 continue
+            if getattr(root_info, "st_file_attributes", 0) & 0x400:
+                error("root-reparse-point", root_index)
+                continue
+            canonical = root.resolve(strict=True)
             if any(canonical == old or canonical in old.parents or old in canonical.parents
                    for old in seen_roots):
                 error("overlapping-root", root_index)
@@ -52,7 +56,9 @@ def audit(roots, *, max_entries=20000, max_directories=5000):
                 break
             try:
                 # Do not follow a directory swapped to a link after discovery.
-                if directory.is_symlink() or not directory.resolve().is_relative_to(canonical):
+                info = directory.lstat()
+                if (stat.S_ISLNK(info.st_mode) or getattr(info, "st_file_attributes", 0) & 0x400
+                        or not directory.resolve().is_relative_to(canonical)):
                     error("directory-link-or-escape", root_index, relative)
                     continue
                 with os.scandir(directory) as listing:
@@ -67,6 +73,8 @@ def audit(roots, *, max_entries=20000, max_directories=5000):
                             info = entry.stat(follow_symlinks=False)
                             if stat.S_ISLNK(info.st_mode):
                                 error("symlink-skipped", root_index, path)
+                            elif getattr(info, "st_file_attributes", 0) & 0x400:
+                                error("reparse-point-skipped", root_index, path)
                             elif stat.S_ISDIR(info.st_mode):
                                 stack.append((Path(entry.path), path))
                             elif stat.S_ISREG(info.st_mode):
@@ -174,7 +182,8 @@ def compare_contents(report, roots, *, per_file_limit=16 * 1024 * 1024,
         for provider in overlap["providers"]:
             try:
                 raw_root = Path(roots[provider["root_index"]])
-                if raw_root.is_symlink():
+                root_info = raw_root.lstat()
+                if stat.S_ISLNK(root_info.st_mode) or getattr(root_info, "st_file_attributes", 0) & 0x400:
                     raise ValueError("root-changed-to-link")
                 root = raw_root.resolve(strict=True)
                 digest = _digest(root / provider["path"], root, provider["size_bytes"], budget)
