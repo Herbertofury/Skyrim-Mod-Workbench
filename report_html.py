@@ -33,6 +33,22 @@ def render_report(report):
             ((m['name'], m.get('directory_state', 'not checked'), m.get('directory_name', '')) for m in report['mods'])))
         sections.append(table(['Reconciliation finding', 'Name'],
             ((f['code'], f['name']) for f in reconciliation['findings'])))
+    if 'profile_assets' in report:
+        assets = report['profile_assets']
+        sections.append('<h2>Export-selected loose asset audit</h2><p>Status: ' + text(assets['status']) +
+                        '. Export priority only, not native manager winners.</p>')
+        sections.append(table(['Root index', 'Mod', 'Export priority'],
+                              ((m['root_index'], m['name'], m['export_priority']) for m in assets['root_mods'])))
+        sections.append(table(['Blocker'], ((b,) for b in assets['blockers'])))
+        if assets['audit']:
+            audit = assets['audit']
+            sections.append('<p>Inventory complete: ' + text(audit['complete']) + '</p>')
+            sections.append(table(['Asset path', 'Provider roots', 'Proposed root', 'Content'],
+                ((o['path_key'], ', '.join(str(p['root_index']) for p in o['providers']),
+                  'withheld' if o['proposed_winner_root'] is None else o['proposed_winner_root'],
+                  o['content_equivalence']) for o in audit['overlaps'])))
+            sections.append(table(['Incomplete evidence', 'Root', 'Path'],
+                ((e['code'], e['root_index'], e['path']) for e in audit['errors'])))
     if 'findings' in report:
         sections.append('<h2>Plugin dependency findings</h2>' + table(
             ['Finding', 'Plugin', 'Master'],

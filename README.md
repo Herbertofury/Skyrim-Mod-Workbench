@@ -99,3 +99,13 @@ Format behavior was checked against maintained upstream [Profile::doWriteModlist
 `python mo2_profile.py profile/modlist.txt --mods-directory /path/to/MO2/mods --html > reconciliation.html` reads only the explicit directory's direct children. It reports missing enabled/inactive entries, directories absent from the export, case ambiguities and unreadable/link/reparse entries. Matching is case-insensitive; foreign/overwrite entries remain outside regular-mod scope rather than being falsely declared missing. Non-directory metadata is counted but not opened.
 
 An incomplete directory inventory produces unknown states, never invented missing-mod conclusions. Exit codes: `0` reconciled within this narrow scope, `1` findings, `2` incomplete/unreadable/invalid; exporting without reconciliation keeps its existing behavior. Inventory is capped at 8,192 direct entries. This is not live profile selection, metadata validation, asset deployment or game acceptance. It does not automatically add, enable, remove or repair any mod. Stop external changes for a consistent observation; outputs omit absolute roots but retain mod names.
+
+### Audit loose files selected by an MO2 export
+
+`python mo2_profile.py profile/modlist.txt --mods-directory /path/to/MO2/mods --audit-assets --html > profile-assets.html`
+
+This explicitly composes reconciliation with the existing bounded loose-file auditor: only enabled regular directories are scanned, in low-to-high **exported** order. Root indexes map back to mod names and export priorities. Disabled mods, separators, foreign entries and overwrite references are excluded. Incomplete reconciliation, unresolved enabled directories or more than 128 enabled roots block scanning entirely; no partial substitute selection is silently audited. An empty enabled selection is explicitly reported, not treated as a completed filesystem audit.
+
+Add `--compare-content` only when bounded content reads are wanted; it requires `--audit-assets`. Default scanning remains metadata-only. Existing global inventory/content limits and incomplete-result winner suppression apply. CLI exits `2` for blocked/incomplete audits and `1` for overlaps or reconciliation findings. Reports retain reconciliation, per-root mappings and full asset evidence together.
+
+This does **not** emulate MO2 VFS: it inventories on-disk loose files, including manager metadata files if present. Hidden-file rules, archive priority, foreign/overwrite contents and active profile state remain unverified. Export-derived proposed winners are hypotheses, not deployment or repair instructions. Stop external changes during observation. No files are changed and no game/native acceptance is claimed.
