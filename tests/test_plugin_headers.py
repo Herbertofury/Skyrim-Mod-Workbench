@@ -79,6 +79,44 @@ class HeaderTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             ph.inventory([])
 
+    def test_reverse_chain_impact_has_bounded_name_normalization(self):
+        # Count operations, not wall time: a repeated full rescan is quadratic.
+        calls = [0]
+
+        class CountedName(str):
+            def casefold(self):
+                calls[0] += 1
+                return super().casefold()
+
+        count = 4096
+        headers = [{'name': CountedName(f'P{i}.esp'),
+                    'masters': [CountedName(f'P{i-1}.esp' if i else 'Old.esm')]}
+                   for i in reversed(range(count))]
+        with patch('plugin_headers.read_header', side_effect=headers):
+            report = ph.inventory([h['name'] for h in headers], 'OLD.ESM')
+        self.assertEqual(report['impact']['direct_dependents'], ['P0.esp'])
+        self.assertEqual(report['impact']['transitive_dependents'],
+                         [h['name'] for h in headers])
+        self.assertLessEqual(calls[0], count * 8)
+        self.assertFalse(report['game_verified'])
+        self.assertFalse(report['applied'])
+
+    def test_impact_diamond_cycle_and_input_order(self):
+        headers = [
+            {'name': 'Leaf.esp', 'masters': ['LEFT.esp', 'Right.esp']},
+            {'name': 'Unrelated.esp', 'masters': ['Missing.esm']},
+            {'name': 'Right.esp', 'masters': ['Old.esm']},
+            {'name': 'Left.esp', 'masters': ['OLD.ESM', 'Leaf.esp']},
+            {'name': 'Old.esm', 'masters': ['Leaf.esp']},
+        ]
+        with patch('plugin_headers.read_header', side_effect=headers):
+            report = ph.inventory([h['name'] for h in headers], 'old.esm')
+        self.assertEqual(report['impact']['direct_dependents'], ['Right.esp', 'Left.esp'])
+        self.assertEqual(report['impact']['transitive_dependents'],
+                         ['Leaf.esp', 'Right.esp', 'Left.esp'])
+        self.assertTrue(report['impact']['scope_complete'])
+        self.assertFalse(report['impact']['all_installed_mods_scanned'])
+
     def test_failed_parse_still_consumes_global_budget(self):
         with tempfile.TemporaryDirectory() as tmp:
             a, b = Path(tmp)/'A.esp', Path(tmp)/'B.esp'
