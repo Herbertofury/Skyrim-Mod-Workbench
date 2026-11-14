@@ -191,3 +191,9 @@ not proof that current files or the native game match the saved report.
 `python plugin_headers.py Explicit.esp Another.esp --master OldMaster.esm --html > headers.html`
 
 The optional offline, script-free HTML view presents declared masters, header flags/counts/hashes, rejected inputs and direct/transitive dependents. JSON remains the default. Add `--save-report NEW_FILE` to save the same create-only integrity envelope; its receipt stays on stderr, separate from HTML stdout. Incomplete inputs or save warnings still exit2. Header flags/counts do not establish ESL eligibility, FormID compatibility or game acceptance. This scans only explicit files, not an entire manager installation; nothing is edited or deployed.
+
+### Review saved evidence without rescanning
+
+`python evidence.py saved-report.json --html > saved-report.html`
+
+Verifies the existing snapshot checksum before generating an offline, script-free view with an explicit **historical snapshot** notice. It does not rescan files, establish authenticity, or confirm current manager/game state. JSON verification remains the default. Invalid evidence produces no HTML and exits2; an integrity-valid report with an unsupported presentation shape produces a separate `unsupported-report-view` diagnostic rather than a traceback or misleading current-status claim. The saved evidence is never modified.
