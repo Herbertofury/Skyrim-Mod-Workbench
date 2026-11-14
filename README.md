@@ -39,3 +39,15 @@ Do not interpret manifest-only success as a healthy install or automatically cle
 The plan includes a SHA-256 of the canonical validated manifest as its basis identity, not an authorization token or proof of actual file contents. Input changes invalidate that identity. CLI exit status still describes the original input: a preview does not turn unresolved findings into success.
 
 **This is not LOOT sorting or an executable repair plan.** Plugin type ordering, implicit official plugins, load limits, user rules, masterlist constraints, record conflicts and real manager state are outside this manifest-only preview. A future supported adapter must revalidate all these before any apply capability. No apply capability exists. Regression tests cover all 120 permutations of a five-node dependency graph, cycles, missing/disabled masters, stable order, disabled slots, basis identity and a 2,000-node reverse chain.
+
+## Read-only loose-asset overlap audit
+
+```sh
+python asset_audit.py /path/to/mod-a/Data /path/to/mod-b/Data
+```
+
+This separate CLI inventories actual supplied loose-file trees (metadata only, no file content reads) and groups case-insensitive relative-path overlaps. Input order is a **hypothetical** low-to-high precedence, not an assertion about the active MO2/Vortex profile. Reports list providers, sizes and proposed winning root indexes. Equal sizes never imply identical content. Case collisions within one root are ambiguous and have no proposed winner. Any incomplete audit suppresses all proposed winners.
+
+Roots must be distinct non-nested directories. Symlinks/special files, inaccessible entries and resource limits produce an explicit incomplete result, never a clean bill of health. Default global limits are 20,000 entries, 5,000 directories and 128 roots. Exit codes are `0` complete/no overlaps, `1` complete/overlaps and `2` invalid or incomplete. Output omits absolute root paths but includes relative asset names: review before sharing. Stop external modifications while inventorying; this is not a transactional filesystem snapshot or hardened scanner against concurrent malicious changes.
+
+No deployment, deletion, copying, archive inspection, content-equivalence check or repair is performed. BSA/BA2 members, plugin-record overrides, manager VFS state, game load rules and native visual correctness require supported upstream adapters and separate acceptance. A proposed loose-file winner is not a recommendation to overwrite anything.
