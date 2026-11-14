@@ -109,3 +109,23 @@ This explicitly composes reconciliation with the existing bounded loose-file aud
 Add `--compare-content` only when bounded content reads are wanted; it requires `--audit-assets`. Default scanning remains metadata-only. Existing global inventory/content limits and incomplete-result winner suppression apply. CLI exits `2` for blocked/incomplete audits and `1` for overlaps or reconciliation findings. Reports retain reconciliation, per-root mappings and full asset evidence together.
 
 This does **not** emulate MO2 VFS: it inventories on-disk loose files, including manager metadata files if present. Hidden-file rules, archive priority, foreign/overwrite contents and active profile state remain unverified. Export-derived proposed winners are hypotheses, not deployment or repair instructions. Stop external changes during observation. No files are changed and no game/native acceptance is claimed.
+
+## Supported external tool control: first adapter
+
+```sh
+python toolchain.py loot /path/to/LOOT.exe
+# Review preview, verify this is your trusted official LOOT binary, then explicitly opt in:
+python toolchain.py loot /path/to/LOOT.exe --execute --expected-sha256 SHA_FROM_PREVIEW --acknowledge-tool-side-effects
+```
+
+The implemented LOOT adapter launches an explicitly selected installed executable with the documented `--game=Skyrim Special Edition` argument. Preview is the default and does not run anything. Execution requires both a matching SHA-256 and acknowledgement that the external tool may write settings/logs or perform configured network activity. No executable discovery, installation, update, download, elevation, shell, arbitrary arguments, `--game-path` setting override or `--auto-sort` is supplied. Native Windows EXE and Linux ELF formats are supported, not scripts, Flatpak URIs or Wine wrappers. Fingerprinting is bounded to 512 MiB and rechecked before launch; a fingerprint is **not** publisher authentication or a hostile-race guarantee.
+
+A successful receipt says only `process_started`, not tool readiness, selected profile, completed analysis or game acceptance. An existing Windows LOOT instance can simply focus its window and ignore arguments. Output is not parsed and the launcher does not manage the GUI lifecycle. Review the tool UI and its own diagnostics. Subsequent manual GUI actions are outside the launch receipt. Preview/receipt includes the explicit executable path: keep it private if personal.
+
+Contract verified against LOOT [initialisation documentation](https://github.com/loot/loot/blob/03f22e99f037c08778731319a6bae0276e7464a0/docs/app/usage/initialisation.rst) and [Qt entry point](https://github.com/loot/loot/blob/03f22e99f037c08778731319a6bae0276e7464a0/src/gui/qt/main.cpp). Upstream `--auto-sort` sorts **and applies** load order then quits; it is deliberately not disguised as read-only analysis. Future apply integration needs validated backups, output verification and recovery contracts. LOOT is GPL-3.0; no upstream code or binaries are vendored here. Adapter tests use authored non-executable byte fixtures and mocked process creation, not a native LOOT acceptance test.
+
+### Toolchain roadmap and non-equivalence boundaries
+
+- **xEdit/SSEEdit:** maintained source [0f3f6fb](https://github.com/TES5Edit/TES5Edit/blob/0f3f6fb2181783cad9c0cd4106ad0ff79ae7bb23/xEdit/xeInit.pas) supports SSE/view modes; [official Tome](https://tes5edit.github.io/docs/2-overview.html) documents switches and GUI workflows. `-DontCache` controls reference caching; quick-auto-clean writes plugin changes. Current source LICENSE is MPL-2.0. Next candidate is explicit view-mode launch; full unattended editing is **not implemented or inferred** from launch switches.
+- **ESLifier:** [upstream](https://github.com/MaskPlague/ESLifier) warns its README may be outdated. Its application entry point is GUI-based, not verified full CLI. Upstream advises selecting MO2 mode inside ESLifier, **not launching through MO2**; keep generated output separate instead of copying over originals. Scanning can write extracted caches and FormID compaction can invalidate saves. No explicit root license was identified in this review: no vendoring/redistribution clearance claimed. Integration remains research-only.
+- **Other editors/creation/management tools:** evaluate exact supported operations, runtime compatibility, licenses, changed files and acceptance individually. Existing research matrix is not proof of “best” for a user's installation. The goal is integrated control where upstream actually supports it, not invented universal CLI coverage.
