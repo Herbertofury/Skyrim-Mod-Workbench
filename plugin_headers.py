@@ -151,15 +151,39 @@ def inventory(paths, master=None):
     return report
 
 
+def diagnose_order(report):
+    """Opt-in diagnostics for supplied header order, never inferred active state."""
+    from workbench import diagnose
+    result = {'scope': 'supplied-header-order-only', 'order_source': 'explicit-argument-order',
+              'all_supplied_plugins_assumed_enabled': True, 'manager_state_verified': False,
+              'game_verified': False, 'applied': False,
+              'status': 'blocked-incomplete-header-inventory', 'findings': [],
+              'limits': ['Every supplied plugin is treated as enabled for this hypothetical order.',
+                         'Missing means absent from the supplied header set, not absent from the installation.',
+                         'Implicit official masters, plugin type rules, LOOT rules and records are not assessed.']}
+    report['dependency_diagnostics'] = result
+    if not report['complete']:
+        return report
+    manifest = {'schema_version': 1, 'plugins': [
+        {'name': p['name'], 'masters': p['masters'], 'enabled': True} for p in report['plugins']]}
+    diagnosed = diagnose(manifest)
+    result['findings'] = diagnosed['findings']
+    result['status'] = 'dependency-findings' if result['findings'] else 'no-supplied-header-dependency-issues'
+    return report
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('plugins', nargs='+')
     parser.add_argument('--html', action='store_true', help='render an offline script-free HTML report')
+    parser.add_argument('--diagnose-order', action='store_true', help='check explicit file order and master dependencies; assume supplied plugins enabled, not manager state')
     parser.add_argument('--master', help='exact old master filename to trace in supplied plugins')
     parser.add_argument('--save-report', metavar='NEW_FILE', help='explicitly save a create-only evidence snapshot')
     args = parser.parse_args(argv)
     try:
         report = inventory(args.plugins, args.master)
+        if args.diagnose_order:
+            diagnose_order(report)
     except ValueError:
         print(json.dumps({'status': 'invalid-input'}), file=sys.stderr)
         return 2
@@ -172,7 +196,9 @@ def main(argv=None):
         print(render_report(report), end='')
     else:
         print(json.dumps(report, indent=2))
-    return 0 if report['complete'] and not save_warning else 2
+    if not report['complete'] or save_warning:
+        return 2
+    return 1 if report.get('dependency_diagnostics', {}).get('findings') else 0
 
 
 if __name__ == '__main__':

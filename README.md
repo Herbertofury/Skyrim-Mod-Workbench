@@ -214,3 +214,13 @@ Exit0 means equal supplied headers, exit1 means header differences, and exit2 me
 Saved-header comparison validates schema 1, HEDR numeric fields and binary-format ranges, header length bounds, and agreement between the raw flags and derived ESM/ESL flags before comparing. An integrity checksum alone is not enough to establish structurally valid evidence. These checks still do not authenticate the producer, recompute header hashes from absent plugin bytes, or validate records/game compatibility.
 
 Manifest, MO2 modlist and saved-evidence CLI inputs must be regular files (ordinary file symlinks remain supported). Shared intake rejects pipes, devices and directories before reading, rechecks the opened descriptor and bounds bytes read. POSIX nonblocking open also handles a path swapped to a FIFO after preflight. This is not a general filesystem-latency timeout or guarantee against concurrent file mutation; no input files are modified.
+
+### Diagnose dependencies directly from explicit plugin headers
+
+```sh
+python plugin_headers.py Base.esm Patch.esp --diagnose-order --html > dependencies.html
+```
+
+Opt-in `--diagnose-order` reuses the existing dependency engine with masters read from actual TES4 headers instead of requiring a hand-authored manifest. It checks missing supplied masters, masters appearing after dependents and cycles. Explicit argument order is hypothetical load order; every supplied plugin is assumed enabled. This does not discover the active profile, implicit official masters, plugin-type ordering, LOOT rules, records or game compatibility. A missing master means absent from the supplied set, not proven absent from the installation.
+
+Incomplete header inventories block diagnosis rather than misclassify failed inputs as missing masters. JSON and offline HTML include scope/assumptions; `--save-report NEW_FILE` retains the same create-only historical evidence. With diagnosis requested, exit1 means dependency findings, exit0 no findings within the stated scope, and exit2 incomplete inputs or save warnings. Without the flag, existing header-inventory behavior is unchanged. No sorting, deployment or plugin writes occur.
