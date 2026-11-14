@@ -149,3 +149,20 @@ The requested end state is discover affected mods, build a backed-up migration p
 For Bruma specifically, verify the actual old archive/plugin hashes and versions (the recalled 1.6.7 version is not independently established), obtain the exact new Bruma/BSAssets manifests, and compare record identities before proposing mappings. Do not equate renamed/removed masters with interchangeable FormIDs. Bruma 2.0's official release warning requires a **new save** and says most submods require updates; do not promise migration of existing saves. xEdit Clean Masters removes unused dependencies, not reference migration. CK/addon version compatibility and licenses must be verified independently; newest is not automatically compatible.
 
 For ESLification, separate no-compaction flag candidates from compaction candidates; retain originals and dependent/reference mapping evidence. Require supported-tool validation and save-compatibility review before writing isolated outputs, then reopen those outputs and test the actual game. Zero-error native acceptance is a target, never an inference from header flags or fixture tests. No private plugin data is bundled or published by this repository.
+
+### xEdit / SSEEdit plugin-view adapter
+
+```sh
+python toolchain.py xedit-view /path/to/SSEEdit.exe
+python toolchain.py xedit-view /path/to/SSEEdit.exe --execute --expected-sha256 SHA_FROM_PREVIEW --acknowledge-tool-side-effects
+```
+
+This second adapter builds the source-verified arguments `-sse -plugins -view -DontCache`. In the pinned upstream [mode selection/initialisation](https://github.com/TES5Edit/TES5Edit/blob/0f3f6fb2181783cad9c0cd4106ad0ff79ae7bb23/xEdit/xeInit.pas), explicit command-line modes precede executable-name detection; view mode sets editing disallowed and saving disabled. `-DontCache` disables reference caching. Settings/log side effects can still occur, so this is not a general write-free sandbox.
+
+Preview accepts an explicitly selected Windows EXE on either host; actual execution requires native Windows, the reviewed executable hash and side-effect acknowledgement. It never adds scripts, quick-auto-clean, load-order edits, master renames, ESL flags, FormID compaction, arbitrary switches or a Wine wrapper. xEdit discovers configured game paths and presents its plugin-selection UI; no active MO2 VFS/profile association is inferred. Installation/version authenticity, actual view-mode behavior and game acceptance must be checked on the user's native setup. Launch success alone never marks analysis complete. Automated tests cover command construction and platform/execution gates with byte fixtures and mocked process creation, not actual xEdit execution.
+
+### Integration knowledge and user-directed decisions
+
+Compatibility research is advisory evidence, not an automatic veto based on speculation. Future Bruma/ESL workflows should retain source, version, confidence, observed failures and the user's override decision without silently disabling authorized updates. Explicit input-integrity checks and destructive-operation safeguards remain separate: an unreadable file or unknown FormID mapping cannot truthfully be reported as a successful repair.
+
+The planned Bethesda knowledge store should preserve compact searchable tool/version/license/format/operation evidence and refresh provenance. SQLite and Rust/rusqlite are candidates to benchmark against representative ingestion, search, durable-write/recovery and application workloads; neither is declared fastest or selected without measurement. CKPE integration must match the exact Creation Kit build and native CPU/runtime constraints. These database and CKPE items are roadmap work, not implemented capabilities in this adapter.
