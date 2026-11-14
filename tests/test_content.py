@@ -59,6 +59,39 @@ class ContentTests(unittest.TestCase):
             self.assertFalse(result['complete'])
             self.assertEqual('unknown', result['overlaps'][0]['content_equivalence'])
 
+    def test_repeat_comparison_drops_failed_provider_stale_hash(self):
+        self.files()
+        report = compare_contents(audit(self.roots), self.roots)
+        old_hash = report['overlaps'][0]['providers'][0]['sha256']
+        (self.roots[0] / 'asset.dds').unlink()
+        result = compare_contents(report, self.roots)
+        overlap = result['overlaps'][0]
+        self.assertNotIn('sha256', overlap['providers'][0])
+        self.assertEqual(old_hash, overlap['providers'][1]['sha256'])
+        self.assertEqual('unknown', overlap['content_equivalence'])
+        self.assertIsNone(overlap['proposed_winner_root'])
+        self.assertFalse(result['complete'])
+
+    def test_repeat_comparison_with_lower_budget_drops_all_prior_hashes(self):
+        self.files()
+        report = compare_contents(audit(self.roots), self.roots)
+        result = compare_contents(report, self.roots, total_limit=0)
+        self.assertTrue(all('sha256' not in p for p in result['overlaps'][0]['providers']))
+        self.assertEqual(0, result['content_comparison']['bytes_read'])
+        self.assertEqual('unknown', result['overlaps'][0]['content_equivalence'])
+        self.assertIsNone(result['overlaps'][0]['proposed_winner_root'])
+
+    def test_skipped_repeat_cannot_display_prior_success(self):
+        self.files()
+        report = compare_contents(audit(self.roots), self.roots)
+        report['complete'] = False
+        with patch('asset_audit.os.open', side_effect=AssertionError('unexpected read')):
+            result = compare_contents(report, self.roots)
+        self.assertEqual('skipped-incomplete-inventory', result['content_comparison']['status'])
+        self.assertTrue(all('sha256' not in p for p in result['overlaps'][0]['providers']))
+        self.assertEqual('unknown', result['overlaps'][0]['content_equivalence'])
+        self.assertIsNone(result['overlaps'][0]['proposed_winner_root'])
+
     def test_link_substitution_refused(self):
         self.files()
         report = audit(self.roots)
