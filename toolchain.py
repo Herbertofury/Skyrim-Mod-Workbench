@@ -24,7 +24,12 @@ def inspect_executable(path, *, windows_binary=False):
         raise ValueError('Windows integration requires an exe, not a shell script')
     digest = hashlib.sha256()
     read = 0
+    identity_fields = ('st_dev', 'st_ino', 'st_size', 'st_mtime_ns')
     with path.open('rb') as stream:
+        opened = os.fstat(stream.fileno())
+        if not stat.S_ISREG(opened.st_mode) or any(
+                getattr(before, field) != getattr(opened, field) for field in identity_fields):
+            raise ValueError('executable changed before fingerprinting')
         magic = stream.read(4)
         if not (magic.startswith(b'MZ') if windows_binary or os.name == 'nt' else magic == b'\x7fELF'):
             raise ValueError('unsupported native executable format')
@@ -35,6 +40,11 @@ def inspect_executable(path, *, windows_binary=False):
             if read > MAX_EXECUTABLE_BYTES:
                 raise ValueError('executable exceeds fingerprint limit')
             digest.update(chunk)
+        observed = os.fstat(stream.fileno())
+        # Windows lstat/fstat ctime meanings differ: compare within fstat only.
+        if any(getattr(opened, field) != getattr(observed, field)
+               for field in (*identity_fields, 'st_ctime_ns')):
+            raise ValueError('executable changed during fingerprinting')
     after = path.lstat()
     fields = ('st_dev', 'st_ino', 'st_size', 'st_mtime_ns', 'st_ctime_ns')
     if read != before.st_size or any(getattr(before, f) != getattr(after, f) for f in fields):
