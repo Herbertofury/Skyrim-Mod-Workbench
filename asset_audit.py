@@ -1,5 +1,6 @@
 """Read-only loose-file overlap inventory. No archive parsing or deployment."""
 import argparse
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -98,12 +99,98 @@ def audit(roots, *, max_entries=20000, max_directories=5000):
             "precedence": "hypothetical-input-order-low-to-high; not verified manager state"}
 
 
+
+def _identity(info):
+    return (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns)
+
+
+def _digest(path, root, expected_size, budget):
+    # Refuse symlink/reparse traversal, including intermediate directories.
+    relative = path.relative_to(root)
+    current = root
+    for part in (None, *relative.parts):
+        if part is not None:
+            current = current / part
+        info = current.lstat()
+        if stat.S_ISLNK(info.st_mode) or getattr(info, "st_file_attributes", 0) & 0x400:
+            raise ValueError("link-or-reparse-point")
+    if not path.resolve(strict=True).is_relative_to(root):
+        raise ValueError("path-escape")
+    before = path.lstat()
+    if not stat.S_ISREG(before.st_mode) or before.st_size != expected_size:
+        raise ValueError("file-changed-before-read")
+    if before.st_size > budget["per_file"] or before.st_size > budget["remaining"]:
+        raise ValueError("content-byte-limit")
+    flags = os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0)
+    fd = os.open(path, flags)
+    with os.fdopen(fd, "rb") as stream:
+        if _identity(os.fstat(stream.fileno())) != _identity(before):
+            raise ValueError("file-changed-before-read")
+        digest = hashlib.sha256()
+        remaining = before.st_size
+        while remaining:
+            chunk = stream.read(min(65536, remaining))
+            if not chunk:
+                raise ValueError("file-changed-during-read")
+            budget["remaining"] -= len(chunk)
+            remaining -= len(chunk)
+            digest.update(chunk)
+        if _identity(os.fstat(stream.fileno())) != _identity(before):
+            raise ValueError("file-changed-during-read")
+    if _identity(path.lstat()) != _identity(before):
+        raise ValueError("file-changed-after-read")
+    return digest.hexdigest()
+
+
+def compare_contents(report, roots, *, per_file_limit=16 * 1024 * 1024,
+                     total_limit=128 * 1024 * 1024):
+    """Explicit opt-in for collision providers only; enrich the in-memory report."""
+    if any(type(n) is not int or n < 0 for n in (per_file_limit, total_limit)):
+        raise ValueError("content limits must be nonnegative integers")
+    report["content_comparison"] = {"algorithm": "sha256", "bytes_read": 0,
+                                    "per_file_limit": per_file_limit, "total_limit": total_limit}
+    # An incomplete inventory cannot justify content/precedence conclusions.
+    if not report["complete"]:
+        report["content_comparison"]["status"] = "skipped-incomplete-inventory"
+        return report
+    budget = {"remaining": total_limit, "per_file": per_file_limit}
+    for overlap in report["overlaps"]:
+        digests = []
+        for provider in overlap["providers"]:
+            try:
+                raw_root = Path(roots[provider["root_index"]])
+                if raw_root.is_symlink():
+                    raise ValueError("root-changed-to-link")
+                root = raw_root.resolve(strict=True)
+                digest = _digest(root / provider["path"], root, provider["size_bytes"], budget)
+                provider["sha256"] = digest
+                digests.append(digest)
+            except (OSError, RuntimeError, ValueError):
+                report["errors"].append({"code": "content-unavailable-changed-or-limited",
+                                         "root_index": provider["root_index"], "path": provider["path"]})
+        overlap["content_equivalence"] = ("unknown" if len(digests) != len(overlap["providers"])
+                                           else "sha256-equal" if len(set(digests)) == 1 else "different")
+    report["content_comparison"]["bytes_read"] = total_limit - budget["remaining"]
+    report["content_comparison"]["status"] = "incomplete" if report["errors"] else "complete"
+    if report["errors"]:
+        report["complete"] = False
+        report["status"] = "incomplete"
+        for overlap in report["overlaps"]:
+            overlap["proposed_winner_root"] = None
+    report["errors"].sort(key=lambda e: (e["root_index"], e["path"], e["code"]))
+    return report
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("roots", nargs="+", help="loose Data trees in hypothetical low-to-high priority")
+    parser.add_argument("--compare-content", action="store_true",
+                        help="opt in to bounded SHA-256 reads of overlapping files only")
     args = parser.parse_args(argv)
     try:
         report = audit(args.roots)
+        if args.compare_content:
+            report = compare_contents(report, args.roots)
     except (ValueError, OSError):
         print(json.dumps({"status": "invalid-input"}), file=sys.stderr)
         return 2
