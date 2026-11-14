@@ -125,18 +125,51 @@ def reconcile_mods(report, mods_directory):
     return report
 
 
+def audit_profile_assets(report, mods_directory, *, compare_content=False):
+    """Audit only enabled regular directories, preserving exported order."""
+    from asset_audit import audit, compare_contents
+    reconciliation = report.get('reconciliation')
+    selected = [m for m in report['mods'] if m['enabled'] and m['kind'] == 'regular']
+    blockers = []
+    if not reconciliation or not reconciliation['complete']:
+        blockers.append('incomplete-directory-reconciliation')
+    if any(m.get('directory_state') != 'present' for m in selected):
+        blockers.append('enabled-directory-unresolved')
+    if len(selected) > 128:
+        blockers.append('enabled-root-limit')
+    result = {'status': 'blocked' if blockers else 'no-enabled-regular-mods' if not selected else 'audited',
+              'blockers': blockers, 'root_mods': [], 'audit': None,
+              'manager_state_verified': False, 'applied': False}
+    report['profile_assets'] = result
+    if blockers or not selected:
+        return report
+    roots = [Path(mods_directory) / m['directory_name'] for m in selected]
+    result['root_mods'] = [{'root_index': i, 'name': m['name'], 'export_priority': m['export_priority']}
+                           for i, m in enumerate(selected)]
+    result['audit'] = audit(roots)
+    if compare_content:
+        compare_contents(result['audit'], roots)
+    return report
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('modlist', help='explicit UTF-8 MO2 modlist.txt export, never modified')
     parser.add_argument('--html', action='store_true', help='render a local static report to stdout')
     parser.add_argument("--mods-directory", help="opt in to read-only reconciliation with an explicitly selected MO2 mods directory")
+    parser.add_argument('--audit-assets', action='store_true', help='audit enabled regular mod loose files in exported priority order')
+    parser.add_argument('--compare-content', action='store_true', help='opt in to bounded overlapping-file reads; requires --audit-assets')
     args = parser.parse_args(argv)
+    if (args.audit_assets and not args.mods_directory) or (args.compare_content and not args.audit_assets):
+        parser.error('--audit-assets requires --mods-directory; --compare-content requires --audit-assets')
     try:
         with open(args.modlist, 'rb') as stream:
             raw = stream.read(MAX_BYTES + 1)
         result = parse_modlist(raw)
         if args.mods_directory:
             result = reconcile_mods(result, args.mods_directory)
+        if args.audit_assets:
+            audit_profile_assets(result, args.mods_directory, compare_content=args.compare_content)
     except (OSError, ValueError) as exc:
         # No personal path/name in the failure output.
         print(json.dumps({'status': 'invalid-mo2-export', 'error_type': type(exc).__name__}), file=sys.stderr)
@@ -146,6 +179,12 @@ def main(argv=None):
         print(render_report(result), end='')
     else:
         print(json.dumps(result, indent=2, ensure_ascii=True))
+    assets = result.get('profile_assets')
+    if assets:
+        if assets['blockers'] or (assets['audit'] and not assets['audit']['complete']):
+            return 2
+        if assets['audit'] and assets['audit']['overlaps']:
+            return 1
     reconciliation = result.get("reconciliation")
     if reconciliation:
         return 2 if not reconciliation["complete"] else (1 if reconciliation["findings"] else 0)
