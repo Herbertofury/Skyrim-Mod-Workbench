@@ -4,6 +4,7 @@ from collections import deque
 import hashlib
 import json
 import math
+import os
 from pathlib import Path
 import stat
 import struct
@@ -75,7 +76,12 @@ def read_header(path, *, budget=None):
     before = path.lstat()
     if not stat.S_ISREG(before.st_mode) or getattr(before, 'st_file_attributes', 0) & 0x400:
         raise ValueError('regular non-link plugin required')
+    identity_fields = ('st_dev', 'st_ino', 'st_size', 'st_mtime_ns')
     with path.open('rb') as stream:
+        opened = os.fstat(stream.fileno())
+        if not stat.S_ISREG(opened.st_mode) or any(
+                getattr(before, field) != getattr(opened, field) for field in identity_fields):
+            raise ValueError('plugin changed before header read')
         if budget[0] < 24:
             raise ValueError('aggregate header limit exceeded')
         budget[0] -= 24
@@ -87,6 +93,11 @@ def read_header(path, *, budget=None):
             raise ValueError('header limit exceeded')
         budget[0] -= size
         raw = prefix + stream.read(size)
+        observed = os.fstat(stream.fileno())
+        # Compare ctime only within fstat; Windows stat/fstat semantics differ.
+        if any(getattr(opened, field) != getattr(observed, field)
+               for field in (*identity_fields, 'st_ctime_ns')):
+            raise ValueError('plugin changed during header read')
     after = path.lstat()
     if any(getattr(before, f) != getattr(after, f) for f in ('st_dev', 'st_ino', 'st_size', 'st_mtime_ns', 'st_ctime_ns')):
         raise ValueError('plugin changed during header inventory')

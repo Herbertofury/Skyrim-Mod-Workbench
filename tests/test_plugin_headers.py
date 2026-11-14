@@ -130,3 +130,39 @@ class HeaderTests(unittest.TestCase):
                 report = ph.inventory([a, b])
             self.assertEqual(len(report['errors']), 2)
             self.assertEqual(report['plugins'], [])
+
+
+class HeaderDescriptorTests(unittest.TestCase):
+    def test_opened_replacement_rejected_before_read(self):
+        with tempfile.TemporaryDirectory() as directory:
+            first = Path(directory) / 'First.esp'
+            second = Path(directory) / 'Second.esp'
+            first.write_bytes(fixture(['Old.esm']))
+            second.write_bytes(fixture(['New.esm']))
+            budget = [1000]
+            # Stable pathname observations do not prove which file was opened.
+            with second.open('rb') as replacement:
+                with patch.object(Path, 'open', return_value=replacement):
+                    with self.assertRaisesRegex(ValueError, 'changed before'):
+                        ph.read_header(first, budget=budget)
+            self.assertEqual([1000], budget)
+
+    def test_same_api_descriptor_change_rejected(self):
+        import os
+        from types import SimpleNamespace
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'Stable.esp'
+            path.write_bytes(fixture())
+            real_fstat = os.fstat
+            calls = 0
+            def observed(fd):
+                nonlocal calls
+                calls += 1
+                info = real_fstat(fd)
+                values = {key: getattr(info, key) for key in
+                          ('st_dev', 'st_ino', 'st_size', 'st_mode', 'st_mtime_ns', 'st_ctime_ns')}
+                values['st_ctime_ns'] += int(calls > 1)
+                return SimpleNamespace(**values)
+            with patch('os.fstat', side_effect=observed):
+                with self.assertRaisesRegex(ValueError, 'changed during'):
+                    ph.read_header(path)
