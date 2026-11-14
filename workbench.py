@@ -1,5 +1,7 @@
 """Read-only, dependency-free diagnostics for explicitly supplied plugin manifests."""
 import argparse
+import hashlib
+import heapq
 import json
 import re
 import sys
@@ -89,6 +91,53 @@ def diagnose(data):
             "status": "issues-found" if findings else "no-manifest-dependency-issues"}
 
 
+
+def dependency_plan(data):
+    """Preview only: no LOOT rules, plugin type ordering, or game validity implied."""
+    report = diagnose(data)
+    plugins = data["plugins"]
+    digest = hashlib.sha256(json.dumps(data, sort_keys=True, separators=(",", ":"),
+                                       ensure_ascii=True).encode()).hexdigest()
+    blockers = [f for f in report["findings"] if f["code"] != "master-not-before-dependent"]
+    plan = {"status": "blocked" if blockers else "preview", "applied": False,
+            "basis_sha256": digest, "scope": "manifest-master-dependencies-only",
+            "requires_external_validation": True, "blockers": blockers,
+            "candidate_order": None, "moves": []}
+    if blockers:
+        return plan
+    active = {p["name"].casefold(): i for i, p in enumerate(plugins) if p["enabled"]}
+    dependents = {key: [] for key in active}
+    indegree = {key: len(plugins[i]["masters"]) for key, i in active.items()}
+    for key, i in active.items():
+        for master in plugins[i]["masters"]:
+            dependents[master.casefold()].append(key)
+    ready = [(active[key], key) for key in active if indegree[key] == 0]
+    heapq.heapify(ready)
+    ordered = []
+    while ready:
+        _, key = heapq.heappop(ready)
+        ordered.append(plugins[active[key]])
+        for child in dependents[key]:
+            indegree[child] -= 1
+            if indegree[child] == 0:
+                heapq.heappush(ready, (active[child], child))
+    # Defense in depth: never offer a partial order if cycle detection changes.
+    if len(ordered) != len(active):
+        plan["status"] = "blocked"
+        plan["blockers"] = [{"code": "incomplete-dependency-order"}]
+        return plan
+    iterator = iter(ordered)
+    candidate = [next(iterator) if p["enabled"] else p for p in plugins]
+    plan["candidate_order"] = [p["name"] for p in candidate]
+    for position, p in enumerate(candidate):
+        if p["enabled"] and active[p["name"].casefold()] != position:
+            plan["moves"].append({"plugin": p["name"], "from_index": active[p["name"].casefold()],
+                                  "to_index": position})
+    if not plan["moves"]:
+        plan["status"] = "no-dependency-reorder-needed"
+    return plan
+
+
 def unique_object(pairs):
     result = {}
     for key, value in pairs:
@@ -101,6 +150,7 @@ def unique_object(pairs):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("manifest", help="UTF-8 JSON inventory; read only, never a game directory")
+    parser.add_argument("--plan", action="store_true", help="preview a dependency-only reorder; never apply")
     args = parser.parse_args(argv)
     try:
         with open(args.manifest, "rb") as stream:
@@ -109,6 +159,8 @@ def main(argv=None):
             raise ValueError("manifest exceeds byte limit")
         data = json.loads(raw.decode("utf-8-sig"), object_pairs_hook=unique_object)
         result = diagnose(data)
+        if args.plan:
+            result["plan"] = dependency_plan(data)
     except (OSError, ValueError, RecursionError) as error:
         # No raw input or filesystem path in default diagnostic output.
         print(json.dumps({"status": "invalid-input", "error_type": type(error).__name__}), file=sys.stderr)
