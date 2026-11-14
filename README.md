@@ -166,3 +166,22 @@ Preview accepts an explicitly selected Windows EXE on either host; actual execut
 Compatibility research is advisory evidence, not an automatic veto based on speculation. Future Bruma/ESL workflows should retain source, version, confidence, observed failures and the user's override decision without silently disabling authorized updates. Explicit input-integrity checks and destructive-operation safeguards remain separate: an unreadable file or unknown FormID mapping cannot truthfully be reported as a successful repair.
 
 The planned Bethesda knowledge store should preserve compact searchable tool/version/license/format/operation evidence and refresh provenance. SQLite and Rust/rusqlite are candidates to benchmark against representative ingestion, search, durable-write/recovery and application workloads; neither is declared fastest or selected without measurement. CKPE integration must match the exact Creation Kit build and native CPU/runtime constraints. These database and CKPE items are roadmap work, not implemented capabilities in this adapter.
+
+### Save plugin-header and MO2 evidence
+
+Both commands can now persist the same create-only, checksummed report envelope
+as manifest and loose-asset diagnostics:
+
+```console
+python plugin_headers.py Patch.esp --master Old.esm --save-report headers.json
+python mo2_profile.py modlist.txt --mods-directory mods --save-report profile.json
+python evidence.py profile.json
+```
+
+`--save-report` is opt-in and writes only the named new report, never a plugin,
+modlist, existing report, or backup. It also works with MO2 `--html`: HTML goes to
+stdout, the save receipt to stderr, and the complete machine-readable evidence
+to the new file. Incomplete header inventories and reconciliation findings can
+be saved without claiming success. Existing diagnostic exit codes remain; save
+failure or unconfirmed durability returns 2. Integrity verification is historical,
+not proof that current files or the native game match the saved report.

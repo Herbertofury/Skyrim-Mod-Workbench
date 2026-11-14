@@ -226,14 +226,8 @@ def main(argv=None):
         return 2
     save_warning = False
     if args.save_report:
-        from evidence import save_report
-        try:
-            receipt = save_report(report, args.save_report)
-            print(json.dumps({"evidence_save": receipt}), file=sys.stderr)
-            save_warning = receipt["directory_fsync"] == "unconfirmed" or not receipt["temporary_removed"]
-        except (OSError, ValueError, RecursionError) as exc:
-            print(json.dumps({"status": "evidence-not-saved", "error_type": type(exc).__name__}), file=sys.stderr)
-            save_warning = True
+        from evidence import save_cli_report
+        save_warning = save_cli_report(report, args.save_report)
     if args.html:
         from report_html import render_report
         print(render_report(report), end="")

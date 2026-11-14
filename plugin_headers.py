@@ -155,14 +155,19 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('plugins', nargs='+')
     parser.add_argument('--master', help='exact old master filename to trace in supplied plugins')
+    parser.add_argument('--save-report', metavar='NEW_FILE', help='explicitly save a create-only evidence snapshot')
     args = parser.parse_args(argv)
     try:
         report = inventory(args.plugins, args.master)
     except ValueError:
         print(json.dumps({'status': 'invalid-input'}), file=sys.stderr)
         return 2
+    save_warning = False
+    if args.save_report:
+        from evidence import save_cli_report
+        save_warning = save_cli_report(report, args.save_report)
     print(json.dumps(report, indent=2))
-    return 0 if report['complete'] else 2
+    return 0 if report['complete'] and not save_warning else 2
 
 
 if __name__ == '__main__':
