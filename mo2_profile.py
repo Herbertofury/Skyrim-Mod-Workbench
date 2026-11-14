@@ -2,6 +2,8 @@
 import argparse
 import hashlib
 import json
+import os
+import stat
 from pathlib import Path
 import re
 import sys
@@ -51,15 +53,90 @@ def parse_modlist(raw):
                            'Export ordering alone does not prove the currently active profile.']}
 
 
+
+def reconcile_mods(report, mods_directory):
+    """Compare export names to direct children only. Never follow links or edit MO2."""
+    root = Path(mods_directory)
+    result = {'scope': 'export-vs-direct-mod-directories', 'complete': True,
+              'findings': [], 'directory_count': 0, 'ignored_non_directory_count': 0}
+    report['reconciliation'] = result
+    directories = {}
+    blocked = set()
+    def finding(code, name=''):
+        result['findings'].append({'code': code, 'name': name})
+    try:
+        info = root.lstat()
+        if stat.S_ISLNK(info.st_mode) or getattr(info, 'st_file_attributes', 0) & 0x400:
+            raise ValueError('root link/reparse point')
+        if not stat.S_ISDIR(info.st_mode):
+            raise ValueError('root not directory')
+        with os.scandir(root) as listing:
+            for count, entry in enumerate(listing, 1):
+                if count > 8192:
+                    finding('directory-entry-limit')
+                    result['complete'] = False
+                    break
+                try:
+                    info = entry.stat(follow_symlinks=False)
+                    key = entry.name.casefold()
+                    if stat.S_ISLNK(info.st_mode) or getattr(info, 'st_file_attributes', 0) & 0x400:
+                        blocked.add(key)
+                        finding('link-or-reparse-point-unresolved', entry.name)
+                        result['complete'] = False
+                    elif stat.S_ISDIR(info.st_mode):
+                        result['directory_count'] += 1
+                        directories.setdefault(key, []).append(entry.name)
+                    else:
+                        result['ignored_non_directory_count'] += 1
+                except OSError:
+                    finding('entry-unreadable', entry.name)
+                    blocked.add(entry.name.casefold())
+                    result['complete'] = False
+    except (OSError, ValueError, RuntimeError):
+        finding('mods-directory-unavailable')
+        result['complete'] = False
+    listed = {m['name'].casefold() for m in report['mods']}
+    for key, names in directories.items():
+        if len(names) > 1:
+            finding('ambiguous-case-directories', ' | '.join(sorted(names)))
+            result['complete'] = False
+        if key not in listed:
+            for name in names:
+                finding('directory-not-in-export', name)
+    for mod in report['mods']:
+        key = mod['name'].casefold()
+        matches = directories.get(key, [])
+        if mod['kind'] in {'foreign', 'overwrite-reference'}:
+            mod['directory_state'] = 'outside-regular-mod-directory-scope'
+        elif key in blocked or len(matches) > 1:
+            mod['directory_state'] = 'unresolved'
+        elif matches:
+            mod['directory_state'] = 'present'
+            mod['directory_name'] = matches[0]
+        elif result['complete']:
+            mod['directory_state'] = 'missing'
+            finding('enabled-mod-directory-missing' if mod['enabled'] and mod['kind'] == 'regular'
+                    else 'inactive-or-separator-directory-missing', mod['name'])
+        else:
+            mod['directory_state'] = 'unknown-incomplete-inventory'
+    result['findings'].sort(key=lambda f: (f['code'], f['name']))
+    report['status'] = ('reconciliation-incomplete' if not result['complete'] else
+                        'reconciliation-findings' if result['findings'] else 'export-directories-reconciled')
+    return report
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('modlist', help='explicit UTF-8 MO2 modlist.txt export, never modified')
     parser.add_argument('--html', action='store_true', help='render a local static report to stdout')
+    parser.add_argument("--mods-directory", help="opt in to read-only reconciliation with an explicitly selected MO2 mods directory")
     args = parser.parse_args(argv)
     try:
         with open(args.modlist, 'rb') as stream:
             raw = stream.read(MAX_BYTES + 1)
         result = parse_modlist(raw)
+        if args.mods_directory:
+            result = reconcile_mods(result, args.mods_directory)
     except (OSError, ValueError) as exc:
         # No personal path/name in the failure output.
         print(json.dumps({'status': 'invalid-mo2-export', 'error_type': type(exc).__name__}), file=sys.stderr)
@@ -69,6 +146,9 @@ def main(argv=None):
         print(render_report(result), end='')
     else:
         print(json.dumps(result, indent=2, ensure_ascii=True))
+    reconciliation = result.get("reconciliation")
+    if reconciliation:
+        return 2 if not reconciliation["complete"] else (1 if reconciliation["findings"] else 0)
     return 0
 
 
