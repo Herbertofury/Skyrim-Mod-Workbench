@@ -156,8 +156,16 @@ def compare_contents(report, roots, *, per_file_limit=16 * 1024 * 1024,
         raise ValueError("content limits must be nonnegative integers")
     report["content_comparison"] = {"algorithm": "sha256", "bytes_read": 0,
                                     "per_file_limit": per_file_limit, "total_limit": total_limit}
+    # This report is mutable and may already contain a previous comparison.
+    # Hashes/equivalence must describe this attempt, never a stale successful read.
+    for overlap in report["overlaps"]:
+        overlap["content_equivalence"] = "unknown"
+        for provider in overlap["providers"]:
+            provider.pop("sha256", None)
     # An incomplete inventory cannot justify content/precedence conclusions.
     if not report["complete"]:
+        for overlap in report["overlaps"]:
+            overlap["proposed_winner_root"] = None
         report["content_comparison"]["status"] = "skipped-incomplete-inventory"
         return report
     budget = {"remaining": total_limit, "per_file": per_file_limit}
