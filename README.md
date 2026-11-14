@@ -80,3 +80,16 @@ Both analysis CLIs accept `--save-report NEW_FILE` to save the complete JSON rep
 Save receipts are emitted to stderr, leaving JSON/HTML stdout intact. Save failure makes the analysis exit `2` while preserving its useful report output. A POSIX directory-fsync failure reports `published: true` with durability **unconfirmed** and exit `2`; do not blindly retry as if no file exists. Windows reports directory fsync unsupported, while confirming the file flush. No platform-independent power-loss guarantee is claimed. No input/game files are modified; only the explicitly requested new evidence file is published.
 
 If temporary cleanup fails after publication, the receipt still reports `published: true`, includes `temporary_removed: false` and exits `2`. The saved evidence is retained; a temporary hard-link may remain for later manual cleanup.
+
+## MO2 profile export adapter
+
+```sh
+python mo2_profile.py /path/to/profile/modlist.txt
+python mo2_profile.py /path/to/profile/modlist.txt --html > mo2-export.html
+```
+
+This read-only adapter imports an actual explicitly selected UTF-8/BOM MO2 `modlist.txt`, including CRLF, comments, enabled/disabled/foreign markers and source-byte SHA-256. It reverses the serialized order into low-to-high exported priority, retains original line numbers and reports regular/separator/foreign/overwrite-reference categories. It does not discover profiles, read account settings, toggle mods or write to MO2. No private implementation was reused.
+
+Format behavior was checked against maintained upstream [Profile::doWriteModlist / refreshModStatus at 4ba22f0](https://github.com/ModOrganizer2/modorganizer/blob/4ba22f0d8b6f9e08e44008b8395cd774551b4ebe/src/profile.cpp) and [separator classification](https://github.com/ModOrganizer2/modorganizer/blob/4ba22f0d8b6f9e08e44008b8395cd774551b4ebe/src/modinfo.cpp). This is a narrow text-format adapter, not copied MO2 code or a replacement for its plugin/VFS implementation. Its strict subset deliberately rejects legacy unmarked rows, malformed/path-shaped names and case-insensitive duplicates instead of silently repairing them. Bounds: 2 MB, 4,096 mods and 4,096 characters per entry.
+
+**An export is not live manager state.** MO2 reconciles installed metadata and missing/new mods, including automatic-priority entries. This adapter does not reconstruct that state, foreign files, overwrite contents, archives or plugin load order. `enabled_regular_names_low_to_high` is an inventory aid, not deployable instructions or proof of actual asset winners. Name-based separator classification is a format hint only. Tests use authored fixtures matching upstream format; acceptance against a populated user profile and native MO2 remains pending.

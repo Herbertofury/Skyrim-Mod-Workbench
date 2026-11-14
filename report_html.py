@@ -19,6 +19,12 @@ def table(headers, rows):
 def render_report(report):
     """Render only; never load external assets, submit data or apply a plan."""
     sections = []
+    if 'mods' in report:
+        sections.append('<h2>MO2 exported mod priority</h2><p>Low to high export order only. Active manager state is not verified.</p>' + table(
+            ['Export priority', 'Name', 'Enabled marker', 'Kind', 'Original line'],
+            ((m['export_priority'], m['name'], m['enabled'], m['kind'], m['file_line']) for m in report['mods'])))
+        sections.append('<h2>Unresolved integration boundaries</h2><ul>' +
+                        ''.join('<li>' + text(item) + '</li>' for item in report['unresolved']) + '</ul>')
     if 'findings' in report:
         sections.append('<h2>Plugin dependency findings</h2>' + table(
             ['Finding', 'Plugin', 'Master'],
