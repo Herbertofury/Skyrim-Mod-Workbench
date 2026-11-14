@@ -25,6 +25,14 @@ def render_report(report):
             ((m['export_priority'], m['name'], m['enabled'], m['kind'], m['file_line']) for m in report['mods'])))
         sections.append('<h2>Unresolved integration boundaries</h2><ul>' +
                         ''.join('<li>' + text(item) + '</li>' for item in report['unresolved']) + '</ul>')
+    if 'reconciliation' in report:
+        reconciliation = report['reconciliation']
+        sections.append('<h2>Export / installed directory reconciliation</h2><p>Inventory: <strong>' +
+                        ('complete within direct-directory scope' if reconciliation['complete'] else 'INCOMPLETE') + '</strong></p>')
+        sections.append(table(['Name', 'Directory state', 'Observed directory name'],
+            ((m['name'], m.get('directory_state', 'not checked'), m.get('directory_name', '')) for m in report['mods'])))
+        sections.append(table(['Reconciliation finding', 'Name'],
+            ((f['code'], f['name']) for f in reconciliation['findings'])))
     if 'findings' in report:
         sections.append('<h2>Plugin dependency findings</h2>' + table(
             ['Finding', 'Plugin', 'Master'],
