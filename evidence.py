@@ -65,7 +65,12 @@ def save_report(report, destination):
             receipt['directory_fsync'] = 'unconfirmed'
         finally:
             if directory_fd is not None:
-                os.close(directory_fd)
+                try:
+                    os.close(directory_fd)
+                except OSError:
+                    # Publication already happened; never report this as unsaved.
+                    # Do not retry close: the descriptor may already be released.
+                    receipt['directory_fsync'] = 'unconfirmed'
     return receipt
 
 
