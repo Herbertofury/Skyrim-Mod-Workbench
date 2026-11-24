@@ -15,3 +15,7 @@ Keep this file and nested instructions project-owned: setup, commands, constrain
 ## Project skill
 
 Use `.agents/skills/plugin-migration-acceptance/SKILL.md` for Bruma/master migrations, ESL candidate analysis, xEdit/LOOT/CKPE integration and evidence review. It distinguishes implemented read-only operations from planned editing and native acceptance.
+
+## Mandatory pre-release optimization gate
+
+Before finalizing every release, follow the owner-mandated [Athena zero-loss pre-release optimization standard](https://github.com/Herbertofury/Athena/blob/main/guidance/PRE_RELEASE_OPTIMIZATION.md). Evaluate shrink-anything, fast-anything and rust-anything using reviewed pinned tools in isolated worktrees; run applicable passes, compare equivalent complete workloads, keep only independently verified improvements, restore rejected changes, and record per-tool evidence or explicit inapplicability/blockers. Never weaken tests, delete required content, force a Rust rewrite or regress functionality, quality, portability, compatibility, security or protected performance metrics. Data/documentation-only releases and existing native Rust paths require honest applicability decisions, not artificial ports. Existing local and pinned governance requirements remain intact.
